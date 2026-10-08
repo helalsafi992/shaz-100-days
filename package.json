@@ -1,1 +1,44 @@
-{"name":"shaz-100-days","version":"1.0.0","private":true,"scripts":{"dev":"next dev --hostname 0.0.0.0","build":"next build","start":"next start --hostname 0.0.0.0 -p ${PORT:-3000}","typecheck":"tsc --noEmit"},"dependencies":{"next":"16.4.0","react":"19.3.0","react-dom":"19.3.0","pg":"^8.16.3","stripe":"^20.0.0"},"devDependencies":{"typescript":"^5.9.3","@types/node":"^22.19.0","@types/react":"^19.2.0","@types/react-dom":"^19.2.0","@types/pg":"^8.15.6","tailwindcss":"4.3.3","@tailwindcss/postcss":"4.3.3"}}
+{
+  "name": "shaz-100-days",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 -p ${PORT:-3000}",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "db:migrate": "node --import tsx scripts/migrate.mts",
+    "owner:invite": "node --import tsx scripts/invite-owner.mts",
+    "test:integration": "node --import tsx scripts/integration.mts",
+    "format": "prettier --write app components lib scripts tests"
+  },
+  "dependencies": {
+    "better-auth": "^1.7.7",
+    "next": "16.4.0",
+    "pg": "^8.16.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "stripe": "^20.0.0",
+    "svix": "^2.7.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "@sparticuz/chromium": "^153.0.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "^22.19.0",
+    "@types/pg": "^8.15.6",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "playwright-core": "^1.64.0",
+    "prettier": "^3.9.9",
+    "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
