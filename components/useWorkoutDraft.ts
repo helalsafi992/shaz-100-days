@@ -91,7 +91,7 @@ export function useWorkoutDraft(
         cache(true);
         if (mounted.current)
           setStatus(
-            e instanceof Error
+            !navigator.onLine ? "Offline — gemt på denne enhed" : e instanceof Error
               ? e.message
               : "Gemmes lokalt. Prøver igen, når forbindelsen er tilbage.",
           );
@@ -128,10 +128,14 @@ export function useWorkoutDraft(
         if (pending.current && !blocked.current) void flush();
       }, 4000);
     window.addEventListener("online", online);
+    window.addEventListener("blur", online);
+    document.addEventListener("visibilitychange", online);
     return () => {
       mounted.current = false;
       clearInterval(timer);
       window.removeEventListener("online", online);
+      window.removeEventListener("blur", online);
+      document.removeEventListener("visibilitychange", online);
     };
   }, [key]);
   useEffect(() => {

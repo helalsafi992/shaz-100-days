@@ -20,6 +20,7 @@ import {
   snapshot,
   ownedDay,
   activePeriod,
+  planningPeriod,
 } from "@/lib/platform";
 import { profileSchema, localDate, dayNumber, addDays } from "@/lib/profile";
 import { alternatives, Exercise, DayPlan } from "@/lib/training";
@@ -69,6 +70,7 @@ export async function GET(
         "shaz_favorites",
         "shaz_shopping",
         "shaz_refunds",
+        "shaz_requests",
       ])
         result[table] = (
           await db().query(`SELECT * FROM ${table} WHERE user_id=$1`, [
@@ -104,6 +106,7 @@ export async function GET(
             mail: [],
             audit: [],
             refunds: [],
+            requests: [],
             missing: [],
             salesOpen: salesOpen(),
             totals: { revenue: 0, test_orders: 0, activated: 0 },
@@ -145,6 +148,11 @@ export async function GET(
           content: content.rows,
           audit: log.rows,
           refunds: refunds.rows,
+          requests: (
+            await db().query(
+              "SELECT id,kind,email,order_reference,message,status,created_at FROM shaz_requests ORDER BY created_at DESC LIMIT 200",
+            )
+          ).rows,
           missing: missingConfiguration(),
           salesOpen: salesOpen(),
         },
@@ -248,16 +256,29 @@ export async function POST(
         .object({ data: z.unknown(), step: z.number().int().min(0).max(7) })
         .parse(input);
       const current = await profile(s.user.id);
-      if (current.start_date) await changeFuture(s.user.id, p.data);
+      if (current.start_date)
+        throw new HttpError(
+          409,
+          "Se og bekræft først ændringerne via Tilpas plan.",
+        );
       else await saveProfile(s.user.id, p.data, p.step);
       return Response.json({ ok: true });
     }
     if (path === "activate") {
-      z.object({confirmStart:z.literal(true)}).parse(input);
+      z.object({ confirmStart: z.literal(true) }).parse(input);
       await activate(s.user.id);
       return Response.json({ ok: true });
     }
-    const p = await activePeriod(s.user.id);
+    const p = await ([
+      "shopping",
+      "favorite",
+      "reschedule",
+      "swap-exercise",
+      "remove-exercise",
+      "restore-exercise",
+    ].includes(path)
+      ? planningPeriod(s.user.id)
+      : activePeriod(s.user.id));
     if (path === "workout-draft") {
       const v = z
         .object({
@@ -370,7 +391,7 @@ export async function POST(
           old,
           ...alternatives(
             old,
-            p.data,
+            { ...p.data, equipment: d.plan.equipment || p.data.equipment },
             (await catalog("exercise")) as Exercise[],
           ),
         ].find((e) => e.id === v.replacement);
@@ -429,7 +450,7 @@ export async function POST(
           [s.user.id, v.date],
         );
         const nearby = await c.query(
-          "SELECT 1 FROM shaz_days WHERE user_id=$1 AND id<>$2 AND plan->>'kind'='workout' AND status<>'skipped' AND scheduled_date BETWEEN $3::date-1 AND $3::date+1",
+          "SELECT plan FROM shaz_days WHERE user_id=$1 AND id<>$2 AND plan->>'kind'='workout' AND status<>'skipped' AND scheduled_date BETWEEN $3::date-1 AND $3::date+1",
           [s.user.id, v.id, v.date],
         );
         const cardio = await c.query(
@@ -447,17 +468,27 @@ export async function POST(
             400,
             "Den dag har allerede cardio, som ikke passer sammen med styrkepasset. Vælg en restitutionsdag.",
           );
-        if (!rest.rowCount || nearby.rowCount)
+        if (
+          !rest.rowCount ||
+          nearby.rows.some(
+            (r) =>
+              !d.plan.split ||
+              d.plan.split === "full" ||
+              !r.plan.split ||
+              r.plan.split === "full" ||
+              r.plan.split === d.plan.split,
+          )
+        )
           throw new HttpError(
             400,
             "Vælg en hviledag med restitution omkring. Vi stabler ikke missede pas.",
           );
         await c.query(
-          "UPDATE shaz_days SET scheduled_date=$3 WHERE user_id=$1 AND id=$2",
+          "UPDATE shaz_days SET scheduled_date=$3,revision=revision+1 WHERE user_id=$1 AND id=$2",
           [s.user.id, rest.rows[0].id, d.scheduled_date],
         );
         await c.query(
-          "UPDATE shaz_days SET scheduled_date=$3 WHERE user_id=$1 AND id=$2",
+          "UPDATE shaz_days SET scheduled_date=$3,revision=revision+1 WHERE user_id=$1 AND id=$2",
           [s.user.id, d.id, v.date],
         );
       });
@@ -496,7 +527,13 @@ export async function POST(
       ) as Recipe | undefined;
       if (
         !recipe ||
-        !suitable(recipe, p.data.diet, p.data.avoid, p.data.cookTime) ||
+        !suitable(
+          recipe,
+          p.data.diet,
+          p.data.avoid,
+          p.data.cookTime,
+          p.data.halal,
+        ) ||
         recipe.category !== v.slot
       )
         throw new HttpError(
@@ -522,7 +559,7 @@ export async function POST(
       if (v.start < localDate() || v.start > addDays(p.start_date, 99))
         throw new HttpError(400, "Vælg en uge i forløbet.");
       const rs = ((await catalog("recipe")) as Recipe[]).filter((r) =>
-        suitable(r, p.data.diet, p.data.avoid, p.data.cookTime),
+        suitable(r, p.data.diet, p.data.avoid, p.data.cookTime, p.data.halal),
       );
       await transaction(async (c) => {
         for (let i = 0; i < 7; i++) {
@@ -549,12 +586,18 @@ export async function POST(
       return Response.json({ ok: true });
     }
     if (path === "shopping") {
-      const v = z.object({ week: date, id, on: z.boolean() }).parse(input);
+      const v = z.object({ week: date, id, on: z.boolean(),count:z.number().int().min(1).max(14).default(7) }).parse(input);
       if (!ingredients.some((i) => i.id === v.id))
         throw new HttpError(400, "Ukendt råvare.");
+      const { mealDays } = await import("@/lib/planning-store");
+      const { mealShopping } = await import("@/lib/meal-plan");
+      const days = await mealDays(s.user.id, v.week, v.count);
+      const grams =
+        mealShopping(days.map((d) => d.data)).find((i) => i.id === v.id)
+          ?.grams || 0;
       await db().query(
-        `INSERT INTO shaz_shopping(user_id,week,ingredient_id,checked) VALUES($1,$2,$3,$4) ON CONFLICT(user_id,week,ingredient_id) DO UPDATE SET checked=$4`,
-        [s.user.id, v.week, v.id, v.on],
+        `INSERT INTO shaz_shopping(user_id,week,ingredient_id,checked,checked_grams) VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id,week,ingredient_id) DO UPDATE SET checked=$4,checked_grams=$5`,
+        [s.user.id, v.week, v.id, v.on, grams],
       );
       return Response.json({ ok: true });
     }
@@ -652,6 +695,21 @@ export async function POST(
 async function adminAction(req: Request, path: string, input: unknown) {
   const s = await admin(req.headers, path !== "admin/content");
   await rate("admin:" + s.user.id, 90, 5);
+  if (path === "admin/request-status") {
+    const p = z
+      .object({
+        id: z.string().uuid(),
+        status: z.enum(["received", "processing", "resolved"]),
+      })
+      .parse(input);
+    const r = await db().query(
+      "UPDATE shaz_requests SET status=$2 WHERE id=$1 RETURNING id",
+      [p.id, p.status],
+    );
+    if (!r.rowCount) throw new HttpError(404, "Sagen findes ikke.");
+    await audit(s.user.id, "request_" + p.status, p.id);
+    return Response.json({ ok: true });
+  }
   if (path === "admin/resend") {
     const p = z.object({ userId: id }).parse(input);
     const r = await db().query("SELECT email FROM shaz_user WHERE id=$1", [

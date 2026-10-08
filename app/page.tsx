@@ -53,6 +53,7 @@ export default async function Home() {
         </a>
         <nav>
           <a href="#indhold">Det får du</a>
+          <a href="#faq">Spørgsmål</a>
         </nav>
         <div className="sales-header-actions">
           <a className="sales-login" href={entitled ? "/app" : "/login"}>
@@ -74,8 +75,8 @@ export default async function Home() {
                 <span>Dine næste 100 dage.</span>
               </h1>
               <p className="herodesc">
-                Træning, cardio og måltider samlet i ét forløb, tilpasset dine
-                valg.
+                Et samlet forløb med træning, cardio og måltider tilpasset din
+                hverdag.
               </p>
               <div className="hero-price">
                 399 kr. <span>Én gang. Intet abonnement.</span>
@@ -93,7 +94,7 @@ export default async function Home() {
                 </p>
               )}
               <div className="herochecks">
-                <span>Hjemme eller fitness</span>
+                <span>Hjemme, fitness eller begge</span>
                 <span>Tilpasset dit niveau</span>
                 <span>Kost & træning samlet</span>
               </div>
@@ -283,9 +284,8 @@ export default async function Home() {
         <span>100 DAY TRANSFORMATION</span>
         <div>
           <a href="/login">Log ind</a>
-          {process.env.SUPPORT_EMAIL && (
-            <a href={"mailto:" + process.env.SUPPORT_EMAIL}>Kontakt</a>
-          )}
+          <a href="/help">Kontakt og hjælp</a>
+          <a href="/withdraw">Fortryd aftale</a>
           <a href="/privacy">Privatliv</a>
           <a href="/terms">Vilkår</a>
         </div>

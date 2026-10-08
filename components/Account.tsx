@@ -63,7 +63,8 @@ export default function Account({
         </p>
       )}
       {test && (
-        <section className="p-card">
+        <details className="p-card">
+          <summary>Testværktøjer · kun dette isolerede miljø</summary>
           <span className="p-eyebrow">DIN TESTPROFIL</span>
           <h2>Prøv hele forløbet.</h2>
           <p>
@@ -105,9 +106,20 @@ export default function Account({
             ))}
           </div>
           {isAdmin && <a href="/admin">Åbn testadministration</a>}
-        </section>
+        </details>
       )}
       <div className="p-grid">
+        <section className="p-card">
+          <h2>Hjælp og dine rettigheder.</h2>
+          <div className="p-actions">
+            <a className="p-secondary" href="/help">
+              Kontakt support
+            </a>
+            <a className="p-secondary" href="/withdraw">
+              Fortryd aftale
+            </a>
+          </div>
+        </section>
         <section className="p-card">
           <h2>Tilpas dit forløb.</h2>
           <p>

@@ -6,6 +6,7 @@ import { profile } from "@/lib/platform";
 import { localDate } from "@/lib/profile";
 import { cardioRows, cardioSettings, editCardio } from "@/lib/cardio-store";
 import { estimate } from "@/lib/nutrition";
+import { trainingChange } from "@/lib/training-change";
 const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -17,6 +18,7 @@ const date = z
 export async function GET(req: Request) {
   try {
     const s = await access(req.headers);
+    const count=z.coerce.number().int().min(1).max(14).parse(new URL(req.url).searchParams.get("count")||7);
     const start = date.parse(
       new URL(req.url).searchParams.get("start") || localDate(),
     );
@@ -25,7 +27,7 @@ export async function GET(req: Request) {
       {
         profile: p,
         energy: estimate(p.data),
-        days: await mealDays(s.user.id, start),
+        days: await mealDays(s.user.id, start, count, false),
         cardio: await cardioRows(s.user.id),
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -44,6 +46,35 @@ export async function POST(
     await rate("plan:" + s.user.id, 180, 5);
     const input = await body(req),
       path = (await params).path.join("/");
+    if (path === "prepare-meals") {
+      const v = z
+        .object({
+          start: date,
+          count: z.number().int().min(1).max(14).default(7),
+        })
+        .parse(input);
+      return Response.json({
+        days: await mealDays(s.user.id, v.start, v.count),
+      });
+    }
+    if (path === "training-preview" || path === "training-confirm")
+      return Response.json(
+        await trainingChange(
+          s.user.id,
+          z
+            .object({
+              data: z.unknown().optional(),
+              id: z.string().uuid().optional(),
+              locationId: z.string().max(80).optional(),
+              minutes: z.number().int().optional(),
+              scope: z.enum(["session", "week", "future"]).optional(),
+              expectedVersion: z.number().int().optional(),
+              fingerprint: z.string().max(64).optional(),
+            })
+            .parse(input),
+          path === "training-confirm",
+        ),
+      );
     if (path === "nutrition-preview" || path === "nutrition-confirm")
       return Response.json(
         await nutritionChange(
@@ -53,6 +84,7 @@ export async function POST(
               settings: z.record(z.string(), z.unknown()),
               expectedVersion: z.number().int().optional(),
               reviewAggressive: z.boolean().optional(),
+              fingerprint: z.string().max(64).optional(),
             })
             .parse(input),
           path === "nutrition-confirm",

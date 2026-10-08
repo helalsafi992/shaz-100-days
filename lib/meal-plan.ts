@@ -28,6 +28,7 @@ export type MealDay = {
   issues: string[];
   ruleVersion: string;
   policy?: NutritionPolicy;
+  householdSize?: number;
 };
 export function totalOptions(options: (MealOption | null)[]): Totals {
   const result = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
@@ -81,7 +82,7 @@ export function eligibleOptions(
   rule: NutritionPolicy = nutritionRule,
 ) {
   return library
-    .filter((r) => suitable(r, p.diet, p.avoid, p.cookTime))
+    .filter((r) => suitable(r, p.diet, p.avoid, p.cookTime, p.halal))
     .map((r) => optionFor(r, target))
     .filter((o): o is MealOption => Boolean(o))
     .filter(
@@ -127,7 +128,9 @@ export function makeMealDay(
       "Dagens allerede registrerede måltider bevares. Det nye måltidsantal gælder fuldt fra i morgen.",
     );
   const slots: MealSlot[] = [...locked];
-  const pool = library.filter((r) => suitable(r, p.diet, p.avoid, p.cookTime));
+  const pool = library.filter((r) =>
+    suitable(r, p.diet, p.avoid, p.cookTime, p.halal),
+  );
   for (let i = 0; i < openCount; i++) {
     let number = i + 1;
     while (slots.some((s) => s.id === `meal-${number}`)) number++;
@@ -205,6 +208,7 @@ export function makeMealDay(
     issues,
     ruleVersion: rule.id + ":" + rule.version,
     policy: rule,
+    householdSize: p.householdSize || 1,
   };
 }
 export function mealQuality(day: MealDay) {
@@ -252,7 +256,10 @@ export function mealShopping(days: MealDay[]) {
     for (const s of day.slots)
       if (s.selected && s.status !== "skipped")
         for (const i of s.selected.recipe.ingredients)
-          map.set(i.id, (map.get(i.id) || 0) + i.grams);
+          map.set(
+            i.id,
+            (map.get(i.id) || 0) + i.grams * (day.householdSize || 1),
+          );
   return [...map]
     .map(([id, grams]) => ({
       ...ingredients.find((i) => i.id === id)!,

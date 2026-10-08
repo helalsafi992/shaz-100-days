@@ -9,7 +9,7 @@ import {
 } from "@/lib/profile";
 import { exercises } from "@/lib/training";
 import { ingredients } from "@/lib/recipes";
-import CardioSettings, { noCardio } from "./CardioSettings";
+import TrainingSettings from "./TrainingSettings";
 import { deficitLevels } from "@/lib/nutrition";
 const titles = [
   "Mål og udgangspunkt.",
@@ -38,9 +38,11 @@ export default function Onboarding({
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [planPreview, setPlanPreview] = useState<any>(null),
     [startConfirmed, setStartConfirmed] = useState(editing);
   const calculation = energy(p);
   function field<K extends keyof Profile>(k: K, v: Profile[K]) {
+    setPlanPreview(null);
     setP((x) => ({
       ...x,
       ...(k === "nutrition" && v === "calculated"
@@ -61,6 +63,29 @@ export default function Onboarding({
     setBusy(true);
     setError("");
     try {
+      if (editing && activate) {
+        const r = await fetch(
+          "/api/plan/" +
+            (planPreview ? "training-confirm" : "training-preview"),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              data: p,
+              expectedVersion: planPreview?.version,
+              fingerprint: planPreview?.fingerprint,
+            }),
+          },
+        );
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        if (!planPreview) {
+          setPlanPreview(d);
+          return;
+        }
+        location.href = "/app";
+        return;
+      }
       const r = await fetch("/api/platform/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,7 +161,7 @@ export default function Onboarding({
             <h2>Hvad vil du arbejde mod?</h2>
             {choices("goal", ["fat-loss", "muscle", "fitness", "maintain"])}
             <h2>Din træningserfaring</h2>
-            {choices("level", ["beginner", "intermediate"])}
+            {choices("level", ["beginner", "intermediate", "experienced"])}
             <p className="p-note">
               Et selvstyret forløb for voksne. Ved skader, sygdom, graviditet
               eller andre særlige behov skal en relevant fagperson vurdere, om
@@ -145,127 +170,26 @@ export default function Onboarding({
           </>
         )}
         {step === 1 && (
-          <>
-            <div className="p-choices">
-              {(["home", "gym"] as const).map((v) => (
-                <button
-                  key={v}
-                  className={p.place === v ? "chosen" : ""}
-                  onClick={() =>
-                    setP({
-                      ...p,
-                      place: v,
-                      equipment:
-                        v === "home"
-                          ? ["bodyweight"]
-                          : ["bodyweight", "machines", "dumbbells"],
-                    })
-                  }
-                >
-                  {labels[v]}
-                </button>
-              ))}
-            </div>
-            <h2>Hvilket udstyr har du?</h2>
-            {[
-              "bodyweight",
-              "dumbbells",
-              "band",
-              ...(p.place === "gym" ? ["machines", "barbell"] : []),
-            ].map((v) => (
-              <label className="p-check" key={v}>
-                <input
-                  type="checkbox"
-                  checked={p.equipment.includes(
-                    v as Profile["equipment"][number],
-                  )}
-                  disabled={v === "bodyweight"}
-                  onChange={(e) =>
-                    field(
-                      "equipment",
-                      e.target.checked
-                        ? [...p.equipment, v as Profile["equipment"][number]]
-                        : p.equipment.filter((x) => x !== v),
-                    )
-                  }
-                />
-                {labels[v]}
-              </label>
-            ))}
-            <p className="p-note">
-              Uden elastik eller vægte bliver trækøvelser lettere øvelser for
-              ryg og skulderkontrol. Belastet roning kræver egnet udstyr.
-            </p>
-          </>
-        )}
-        {step === 1 && (
-          <>
-            <div className="p-choices">
-              {([2, 3, 4] as const).map((d) => (
-                <button
-                  key={d}
-                  className={p.days === d ? "chosen" : ""}
-                  onClick={() =>
-                    setP({
-                      ...p,
-                      days: d,
-                      weekdays:
-                        d === 2 ? [1, 4] : d === 3 ? [1, 3, 5] : [1, 2, 4, 5],
-                    })
-                  }
-                >
-                  {d} dage
-                </button>
-              ))}
-            </div>
-            <h2>Dine foretrukne dage</h2>
-            <div className="weekday-picker">
-              {["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"].map((d, i) => (
-                <button
-                  key={i}
-                  className={p.weekdays.includes(i) ? "chosen" : ""}
-                  onClick={() =>
-                    field(
-                      "weekdays",
-                      p.weekdays.includes(i)
-                        ? p.weekdays.filter((x) => x !== i)
-                        : [...p.weekdays, i].sort(),
-                    )
-                  }
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-            <p className="p-note">
-              Vælg {p.days} dage. Ved 2–3 dage træner du helkrop. Ved 4 dage
-              skifter du mellem over- og underkrop.
-            </p>
-          </>
-        )}
-        {step === 1 && (
-          <>
-            {choices(
-              "minutes",
-              [25, 40, 55],
-              ["25 minutter", "40 minutter", "55 minutter"],
-            )}
-            <p className="p-note">
-              Tiden inkluderer opvarmning og pauser. Kortere pas indeholder
-              færre øvelser, så planen kan passe til din hverdag.
-            </p>
-          </>
-        )}
-        {step === 1 && (
-          <CardioSettings
-            value={p.cardio || noCardio}
-            onChange={(v) => field("cardio", v)}
+          <TrainingSettings
+            value={p}
+            onChange={(v) => {
+              setP(v);
+              setPlanPreview(null);
+            }}
           />
         )}
         {step === 2 && (
           <>
             <h2>Kostpræferencer</h2>
-            {choices("diet", ["all", "vegetarian", "halal"])}
+            {choices("diet", ["all", "vegetarian"])}
+            <label className="p-check">
+              <input
+                type="checkbox"
+                checked={p.halal || p.diet === "halal"}
+                onChange={(e) => field("halal", e.target.checked)}
+              />
+              Halal-egnede ingredienstyper (kan kombineres med vegetarisk)
+            </label>
             <h2>Madlavningstid</h2>
             {choices(
               "cookTime",
@@ -579,6 +503,29 @@ export default function Onboarding({
             </p>
           </>
         )}
+        {planPreview && (
+          <section className="p-card">
+            <h2>Forhåndsvisning</h2>
+            <p>{planPreview.explanation}</p>
+            <p>
+              {planPreview.changes.length} fremtidige pas ændres. Eksisterende
+              sæt bevares.
+            </p>
+            <details>
+              <summary>Se berørte datoer og øvelser</summary>
+              {planPreview.changes.map((c: any) => (
+                <div key={c.id}>
+                  <h3>{c.date}</h3>
+                  <p>
+                    {c.before.title} · {c.before.minutes} min. → {c.after.title}{" "}
+                    · {c.after.locationName} · {c.after.minutes} min.
+                  </p>
+                  <p>{c.after.exercises.map((e: any) => e.name).join(" · ")}</p>
+                </div>
+              ))}
+            </details>
+          </section>
+        )}
         {error && (
           <p className="p-error" role="alert">
             {error}
@@ -603,7 +550,9 @@ export default function Onboarding({
               ? "Gemmer…"
               : step === 3
                 ? editing
-                  ? "Gem fremtidige ændringer"
+                  ? planPreview
+                    ? "Bekræft ændringer"
+                    : "Se ændringer før du gemmer"
                   : "Start mit 100-dages forløb"
                 : "Gem og fortsæt →"}
           </button>

@@ -1,5 +1,6 @@
 import type { Profile } from "./profile";
-import { addDays } from "./profile";
+import { addDays, normalizeProfile, sessionProfile } from "./profile";
+import { HttpError } from "./errors";
 export type Exercise = {
   id: string;
   name: string;
@@ -9,6 +10,8 @@ export type Exercise = {
   cue: string;
   videoId?: string;
   version: number;
+  unit?: "reps" | "seconds";
+  perSide?: boolean;
 };
 const x = (
   id: string,
@@ -27,6 +30,42 @@ const x = (
   version: 1,
 });
 export const exercises: Exercise[] = [
+  x(
+    "barbell-squat",
+    "Squat med vægtstang",
+    "squat",
+    ["barbell", "rack"],
+    [
+      "Indstil sikkerhedsstøtterne og placér stangen stabilt på øvre ryg.",
+      "Bøj knæ og hofter under kontrol, mens hele foden støtter.",
+      "Rejs dig uden at miste kropsspændingen. Start med let belastning.",
+    ],
+    "Brug kun rack med sikkerhedsstøtter; få teknikken gennemgået ved tvivl.",
+  ),
+  x(
+    "barbell-rdl",
+    "Rumænsk dødløft med vægtstang",
+    "hinge",
+    ["barbell"],
+    [
+      "Hold stangen tæt foran lårene med bløde knæ.",
+      "Skub hoften bagud med rolig ryg og stangen tæt langs benene.",
+      "Rejs dig fra en kontrolleret dybde uden at læne bagud.",
+    ],
+    "Start let; bevægelighed bestemmer dybden.",
+  ),
+  x(
+    "barbell-row",
+    "Foroverbøjet roning med vægtstang",
+    "pull",
+    ["barbell"],
+    [
+      "Bøj i hoften med bløde knæ og stabil ryg.",
+      "Træk stangen mod nederste ribben uden at rykke.",
+      "Sænk roligt og behold samme kropsposition.",
+    ],
+    "Vælg håndvægtsroning med støtte hvis positionen er svær at holde.",
+  ),
   x(
     "chair-squat",
     "Rejs dig fra en stol",
@@ -67,7 +106,7 @@ export const exercises: Exercise[] = [
     "leg-press",
     "Benpres",
     "squat",
-    ["machines"],
+    ["leg-press"],
     [
       "Indstil sædet, og sæt fødderne midt på pladen.",
       "Sænk vægten kontrolleret, mens ryg og bækken bliver i sædet.",
@@ -115,7 +154,7 @@ export const exercises: Exercise[] = [
     "chest-press",
     "Brystpres i maskine",
     "push",
-    ["machines"],
+    ["chest-press"],
     [
       "Indstil grebene i brysthøjde og hold fødderne i gulvet.",
       "Pres frem uden at løfte skuldrene.",
@@ -163,7 +202,7 @@ export const exercises: Exercise[] = [
     "cable-row",
     "Siddende kabelroning",
     "pull",
-    ["machines"],
+    ["cable"],
     [
       "Sid stabilt med bløde knæ og lang ryg.",
       "Træk grebet mod den nederste del af brystkassen.",
@@ -210,8 +249,8 @@ export const exercises: Exercise[] = [
   x(
     "leg-curl",
     "Siddende lårcurl",
-    "hinge",
-    ["machines"],
+    "knee-flexion",
+    ["leg-curl"],
     [
       "Indstil maskinens drejepunkt ved knæene.",
       "Bøj knæene og træk puden ned uden at løfte hoften.",
@@ -319,7 +358,7 @@ export const exercises: Exercise[] = [
     "lat-pull",
     "Nedtræk",
     "pull",
-    ["machines"],
+    ["lat-pull"],
     [
       "Sæt lårpuden, så du sidder stabilt.",
       "Træk grebet mod øverste bryst uden at rykke.",
@@ -328,6 +367,21 @@ export const exercises: Exercise[] = [
     "Træk foran kroppen, aldrig bag nakken.",
   ),
 ];
+for (const e of exercises) {
+  e.perSide = [
+    "db-row",
+    "split-squat",
+    "db-split",
+    "deadbug",
+    "bird-dog",
+    "side-plank",
+  ].includes(e.id);
+  if (e.id === "side-plank") {
+    e.unit = "seconds";
+    e.cue =
+      "Hold en rolig position 15–25 sekunder på hver side; stop når kontrollen mistes.";
+  }
+}
 export const focuses = [
   "Find to faste tidspunkter og lær bevægelserne.",
   "Gentag roligt. Skriv dine første sæt ned.",
@@ -378,18 +432,30 @@ export type DayPlan = {
   removedExercises?: PlannedExercise[];
   ruleVersion: string;
   profileVersion: number;
+  locationId?: string;
+  locationName?: string;
+  equipment?: Profile["equipment"];
+  split?: "full" | "upper" | "lower";
+  explanations?: string[];
 };
+export function hasEquipment(e: Exercise, p: Profile) {
+  return e.equipment.every(
+    (eq) =>
+      eq === "bodyweight" ||
+      p.equipment.includes(eq as Profile["equipment"][number]) ||
+      (["leg-press", "chest-press", "cable", "leg-curl", "lat-pull"].includes(
+        eq,
+      ) &&
+        p.equipment.includes("machines")),
+  );
+}
 export function alternatives(e: Exercise, p: Profile, catalog = exercises) {
   return catalog.filter(
     (x) =>
       x.id !== e.id &&
       !(p.exerciseAvoid || []).includes(x.id) &&
       x.pattern === e.pattern &&
-      x.equipment.every(
-        (eq) =>
-          p.equipment.includes(eq as Profile["equipment"][number]) ||
-          eq === "bodyweight",
-      ),
+      hasEquipment(x, p),
   );
 }
 function choose(
@@ -402,13 +468,13 @@ function choose(
     (e) =>
       e.pattern === pattern &&
       !(p.exerciseAvoid || []).includes(e.id) &&
-      e.equipment.every(
-        (eq) =>
-          eq === "bodyweight" ||
-          p.equipment.includes(eq as Profile["equipment"][number]),
-      ),
+      hasEquipment(e, p),
   );
-  if (!options.length) throw new Error("MISSING_EXERCISE_VARIANT");
+  if (!options.length)
+    throw new HttpError(
+      400,
+      `Ingen egnet øvelse til ${pattern} på den valgte lokation. Tilføj egnet udstyr eller ændr dit frivillige øvelsesfravalg.`,
+    );
   const loaded = options.filter((e) => e.equipment[0] !== "bodyweight");
   const pool = loaded.length ? loaded : options;
   return pool[(p.level === "beginner" ? index : index + 1) % pool.length];
@@ -420,6 +486,8 @@ export function generatePlan(
   version = 1,
   template?: { sets: number; min: number; max: number; rest: number },
 ): DayPlan[] {
+  p = normalizeProfile(p);
+  const adjacent = p.weekdays.some((d) => p.weekdays.includes((d + 1) % 7));
   let n = 0;
   return Array.from({ length: 100 }, (_, i) => {
     const day = i + 1,
@@ -430,19 +498,29 @@ export function generatePlan(
       day < 100;
     const kind = day === 100 ? "finish" : isTraining ? "workout" : "rest";
     const index = n;
+    const weekday = new Date(date + "T12:00:00Z").getUTCDay();
+    const slot = p.schedule!.find((s) => s.weekday === weekday);
+    const location =
+      p.locations!.find((l) => l.id === slot?.locationId) || p.locations![0];
+    const local = sessionProfile(p, weekday);
+    const split =
+      p.days >= 4 || adjacent ? (n % 2 === 0 ? "upper" : "lower") : "full";
     let patterns = ["squat", "push", "pull", "hinge", "core"];
-    if (p.days === 4) {
+    if (split !== "full") {
       patterns =
         n % 2 === 0
           ? ["push", "pull", "shoulder", "core"]
           : ["squat", "hinge", "single", "calf", "core"];
     }
-    if (p.minutes === 25) patterns = patterns.slice(0, 4);
-    if (p.minutes === 55 && p.days < 4) patterns.splice(4, 0, "single");
+    if (local.minutes <= 25)
+      patterns = patterns.slice(0, local.minutes === 20 ? 3 : 4);
+    if (local.minutes >= 55 && split === "full")
+      patterns.splice(4, 0, "single");
     if (isTraining) n++;
+    // No calendar-driven progression: volume changes only after an accepted adjustment.
     const sets =
-      day <= 14
-        ? Math.min(2, template?.sets || 2)
+      local.minutes <= 25
+        ? 2
         : template?.sets || (p.level === "beginner" ? 2 : 3);
     return {
       day,
@@ -456,12 +534,24 @@ export function generatePlan(
           ? "100 dage. Dit næste kapitel."
           : kind === "rest"
             ? "Plads til restitution"
-            : p.days === 4
+            : split !== "full"
               ? index % 2 === 0
                 ? "Overkrop & kontrol"
                 : "Underkrop & fundament"
               : `Helkrop ${index % 2 === 0 ? "A" : "B"}`,
-      minutes: kind === "workout" ? p.minutes : 0,
+      minutes: kind === "workout" ? local.minutes : 0,
+      locationId: location.id,
+      locationName: location.name,
+      equipment: location.equipment,
+      split,
+      explanations: [
+        p.days === 1
+          ? "Ét ugentligt pas er et begrænset start-/vedligeholdelsesvalg."
+          : split !== "full"
+            ? "Over-/underkropsfordeling respekterer dine valgte dage uden at gentage samme belastning."
+            : "Helkrop fordelt på dine valgte dage.",
+        "Omfanget tilpasses varigheden. Fremgang kræver registreret præstation og dit valg.",
+      ],
       warmup:
         kind === "workout"
           ? [
@@ -472,7 +562,7 @@ export function generatePlan(
           : [],
       exercises: isTraining
         ? patterns.map((pat, j) => ({
-            ...choose(pat, p, index + j, catalog),
+            ...choose(pat, local, index + j, catalog),
             sets,
             min: template?.min || 8,
             max: template?.max || 12,
@@ -481,7 +571,7 @@ export function generatePlan(
               "Stop med ca. 2–3 gode gentagelser tilbage. Ingen træning til udmattelse.",
           }))
         : [],
-      ruleVersion: "shaz-rules-1",
+      ruleVersion: "shaz-hybrid-2-review",
       profileVersion: version,
     };
   });

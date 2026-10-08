@@ -11,16 +11,32 @@ import { catalog } from "./content";
 import { HttpError } from "./security";
 import { estimate } from "./nutrition";
 import { requirePlanningRules } from "./planning-store";
-export async function syncCardio(user: string, p: Profile, from = localDate()) {
+export async function syncCardio(
+  user: string,
+  p: Profile,
+  from = localDate(),
+  expectedVersion?: number,
+) {
   const rule =
     (await catalog("cardio-rule")).find((r) => r.id === cardioRule.id) ||
     cardioRule;
   const plans = generateCardio(p, rule);
   await transaction(async (c) => {
-    await c.query(
-      "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+    const locked = await c.query(
+      "SELECT user_id,version FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
       [user],
     );
+    if (expectedVersion !== undefined) {
+      if (locked.rows[0]?.version !== expectedVersion)
+        throw new HttpError(
+          409,
+          "Profilen er ændret. Se en ny forhåndsvisning.",
+        );
+      await c.query(
+        "UPDATE shaz_profile SET data=$2,version=version+1,updated_at=now() WHERE user_id=$1",
+        [user, JSON.stringify(p)],
+      );
+    }
     await c.query(
       "UPDATE shaz_cardio SET status='removed',updated_at=now() WHERE user_id=$1 AND scheduled_date>=$2 AND status='planned' AND log='{}'::jsonb",
       [user, from],
@@ -79,13 +95,9 @@ export async function cardioSettings(
       explanation:
         "Ændringen påvirker ikke dit kaloriemål. Hvis din samlede træning er ændret, kan du selv godkende en ny aktivitetsantagelse i beregneren.",
     };
-  const r = await db().query(
-    "UPDATE shaz_profile SET data=$2,version=version+1,updated_at=now() WHERE user_id=$1 AND version=$3 RETURNING user_id",
-    [user, JSON.stringify(p), input.expectedVersion],
-  );
-  if (!r.rowCount)
-    throw new HttpError(409, "Profilen er ændret. Se en ny forhåndsvisning.");
-  await syncCardio(user, p);
+  if (typeof input.expectedVersion !== "number")
+    throw new HttpError(409, "Se en forhåndsvisning først.");
+  await syncCardio(user, p, localDate(), input.expectedVersion);
   return { ok: true };
 }
 export async function editCardio(

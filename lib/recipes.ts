@@ -785,6 +785,7 @@ export function suitable(
   diet: string,
   avoid: string[],
   minutes = 60,
+  halal = false,
 ) {
   return (
     recipe.minutes <= minutes &&
@@ -795,7 +796,7 @@ export function suitable(
         !avoid.includes(f.id) &&
         !f.allergens.some((a) => avoid.includes(a)) &&
         (diet !== "vegetarian" || f.vegetarian) &&
-        (diet !== "halal" || f.halal)
+        (!(diet === "halal" || halal) || f.halal)
       );
     })
   );

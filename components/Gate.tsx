@@ -15,7 +15,7 @@ export default function Gate({ message }: { message: string }) {
           </a>
           {salesOpen() ? (
             <a className="p-secondary" href="/checkout">
-              Køb forløbet – 399 kr.
+              Fortsæt dit køb – 399 kr.
             </a>
           ) : (
             <span className="p-note">Salg er ikke åbnet.</span>

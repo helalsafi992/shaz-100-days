@@ -16,6 +16,7 @@ export default function Checkout({
     [name, setName] = useState(""),
     [address, setAddress] = useState(""),
     [password, setPassword] = useState(""),
+    [showPassword, setShowPassword] = useState(false),
     [adult, setAdult] = useState(false),
     [terms, setTerms] = useState(false),
     [busy, setBusy] = useState(false),
@@ -169,7 +170,7 @@ export default function Checkout({
                   <label>
                     Adgangskode
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       autoComplete={
                         mode === "signup" ? "new-password" : "current-password"
                       }
@@ -184,6 +185,14 @@ export default function Checkout({
                   {mode === "login" && (
                     <a href="/login?action=forgot">Glemt adgangskode?</a>
                   )}
+                  <button
+                    type="button"
+                    className="p-secondary"
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? "Skjul adgangskode" : "Vis adgangskode"}
+                  </button>
                 </>
               ) : (
                 <p>

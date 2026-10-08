@@ -1,5 +1,6 @@
 "use client";
 import type { Profile } from "@/lib/profile";
+import { weekdays, weekdayNames } from "@/lib/profile";
 export const noCardio: NonNullable<Profile["cardio"]> = {
   days: 0,
   weekdays: [],
@@ -34,7 +35,7 @@ export default function CardioSettings({
               })
             }
           >
-            {[0, 1, 2, 3, 4].map((n) => (
+            {[0, 1, 2, 3, 4, 5, 6].map((n) => (
               <option key={n} value={n}>
                 {n === 0 ? "Ingen ekstra cardio" : n}
               </option>
@@ -64,6 +65,7 @@ export default function CardioSettings({
               >
                 <option value="beginner">Begynder</option>
                 <option value="intermediate">Let øvet</option>
+                <option value="experienced">Erfaren</option>
               </select>
             </label>
             <label>
@@ -88,7 +90,7 @@ export default function CardioSettings({
             cardio.
           </p>
           <div className="weekday-choices">
-            {["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"].map((l, i) => (
+            {weekdays.map((i) => (
               <label key={i} className="p-check">
                 <input
                   type="checkbox"
@@ -102,7 +104,7 @@ export default function CardioSettings({
                     )
                   }
                 />
-                {l}
+                {weekdayNames[i].slice(0, 3)}
               </label>
             ))}
           </div>
@@ -114,6 +116,8 @@ export default function CardioSettings({
                 ["cycle", "Cykling"],
                 ["walk-run", "Løb/gang"],
                 ["elliptical", "Crosstrainer"],
+                ["run", "Løb (løbeerfaring)"],
+                ["row", "Roning"],
               ] as const
             ).map(([v, l]) => (
               <label className="p-check" key={v}>
@@ -141,6 +145,7 @@ export default function CardioSettings({
                 ["bike", "Cykel / motionscykel"],
                 ["treadmill", "Løbebånd"],
                 ["elliptical", "Crosstrainer"],
+                ["rower", "Romaskine"],
               ] as const
             ).map(([v, l]) => (
               <label className="p-check" key={v}>

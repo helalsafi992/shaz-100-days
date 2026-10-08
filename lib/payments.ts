@@ -247,11 +247,27 @@ export async function processEvent(
         typeof s.payment_intent.latest_charge === "object"
           ? s.payment_intent.latest_charge
           : null;
-      const status = charge?.refunded
-        ? "refunded"
-        : charge?.disputed
-          ? "disputed"
-          : "paid";
+      const paymentId =
+        typeof s.payment_intent === "string"
+          ? s.payment_intent
+          : s.payment_intent?.id;
+      // Persisted tombstones protect even when a refund/dispute arrives before fulfillment.
+      await c.query(
+        "INSERT INTO shaz_payment_state(payment_id) VALUES($1) ON CONFLICT DO NOTHING",
+        [paymentId],
+      );
+      const tomb = (
+        await c.query(
+          "SELECT * FROM shaz_payment_state WHERE payment_id=$1 FOR UPDATE",
+          [paymentId],
+        )
+      ).rows[0];
+      const status =
+        charge?.refunded || tomb.refunded_amount >= 39900
+          ? "refunded"
+          : charge?.disputed || tomb.disputed
+            ? "disputed"
+            : "paid";
       const r = await c.query(
         `INSERT INTO shaz_orders(id,checkout_id,payment_id,email,amount,currency,livemode,status,product,paid_at,terms_version,receipt,user_id) VALUES($1,$2,$3,$4,39900,'dkk',$5,$8,'shaz-100-days',now(),$6,$7,$9) ON CONFLICT(checkout_id) DO NOTHING RETURNING id`,
         [
@@ -269,6 +285,10 @@ export async function processEvent(
         ],
       );
       await c.query(
+        "UPDATE shaz_orders SET refunded_amount=GREATEST(refunded_amount,$2),status=CASE WHEN $2>=amount THEN 'refunded' WHEN $3 THEN 'disputed' ELSE status END WHERE payment_id=$1",
+        [paymentId, tomb.refunded_amount, tomb.disputed],
+      );
+      await c.query(
         "UPDATE shaz_checkout SET email=$2,checkout_id=$3,state=CASE WHEN state='legacy' THEN state ELSE 'complete' END WHERE id=$1",
         [s.client_reference_id, email, s.id],
       );
@@ -280,6 +300,10 @@ export async function processEvent(
         typeof charge.payment_intent === "string"
           ? charge.payment_intent
           : charge.payment_intent?.id;
+      await c.query(
+        "INSERT INTO shaz_payment_state(payment_id,refunded_amount) VALUES($1,$2) ON CONFLICT(payment_id) DO UPDATE SET refunded_amount=GREATEST(shaz_payment_state.refunded_amount,excluded.refunded_amount)",
+        [pid, charge.amount_refunded],
+      );
       await c.query(
         "UPDATE shaz_orders SET refunded_amount=GREATEST(refunded_amount,$2),status=CASE WHEN GREATEST(refunded_amount,$2)>=amount THEN 'refunded' ELSE status END WHERE payment_id=$1",
         [pid, charge.amount_refunded],
@@ -294,6 +318,14 @@ export async function processEvent(
         typeof d.payment_intent === "string"
           ? d.payment_intent
           : d.payment_intent?.id;
+      await c.query(
+        "INSERT INTO shaz_payment_state(payment_id,disputed,dispute_at) VALUES($1,$2,$3) ON CONFLICT(payment_id) DO UPDATE SET disputed=excluded.disputed,dispute_at=excluded.dispute_at WHERE shaz_payment_state.dispute_at<=excluded.dispute_at",
+        [
+          pid,
+          event.type !== "charge.dispute.closed" || d.status !== "won",
+          event.created || 0,
+        ],
+      );
       await c.query(
         "UPDATE shaz_orders SET status=CASE WHEN refunded_amount>=amount THEN 'refunded' WHEN $2='won' THEN 'paid' ELSE 'disputed' END,last_dispute_at=$3 WHERE payment_id=$1 AND last_dispute_at<=$3",
         [

@@ -38,6 +38,15 @@ type AdminState = {
   content: Entry[];
   audit: { id: string; action: string; target: string; created_at: string }[];
   refunds: { id: string; order_id: string; status: string; reason: string }[];
+  requests: {
+    id: string;
+    kind: string;
+    email: string;
+    order_reference: string;
+    message: string;
+    status: string;
+    created_at: string;
+  }[];
   missing: string[];
   salesOpen: boolean;
 };
@@ -126,6 +135,7 @@ export default function Admin() {
           ["customers", "Kunder"],
           ["content", "Indhold"],
           ["delivery", "Levering"],
+          ["requests", "Support og fortrydelse"],
           ["audit", "Auditlog"],
         ]
           .filter(([v]) => data?.role !== "editor" || v === "content")
@@ -146,6 +156,52 @@ export default function Admin() {
         </p>
       ) : (
         <>
+          {tab === "requests" && (
+            <section className="p-card">
+              <h2>Gemte henvendelser</h2>
+              <p>
+                Modtagelse er ikke refundering. Afklar identitet privat;
+                tilbagebetaling gennemføres i Stripe og verificeres via webhook.
+              </p>
+              {!data.requests.length ? (
+                <p>Ingen henvendelser.</p>
+              ) : (
+                data.requests.map((r) => (
+                  <article className="p-card" key={r.id}>
+                    <h3>
+                      {r.kind === "withdrawal" ? "Fortrydelse" : "Support"} ·{" "}
+                      {r.status}
+                    </h3>
+                    <p>
+                      {r.email} ·{" "}
+                      {new Date(r.created_at).toLocaleString("da-DK")}
+                    </p>
+                    <p>
+                      Sag {r.id} · Ordre {r.order_reference || "ikke oplyst"}
+                    </p>
+                    <p style={{ whiteSpace: "pre-wrap" }}>{r.message}</p>
+                    <label>
+                      Status
+                      <select
+                        value={r.status}
+                        disabled={busy}
+                        onChange={(e) =>
+                          action("request-status", {
+                            id: r.id,
+                            status: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="received">Modtaget</option>
+                        <option value="processing">Under behandling</option>
+                        <option value="resolved">Besvaret / behandlet</option>
+                      </select>
+                    </label>
+                  </article>
+                ))
+              )}
+            </section>
+          )}
           {tab === "overview" && (
             <>
               <div className="p-metrics">

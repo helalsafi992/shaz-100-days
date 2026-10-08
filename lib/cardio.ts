@@ -58,8 +58,14 @@ export function weekProblems(p: Profile, rule: CardioPolicy = cardioRule) {
     issues.push("Cykling kræver adgang til cykel eller motionscykel.");
   if (c.forms.includes("elliptical") && !c.equipment.includes("elliptical"))
     issues.push("Crosstrainer kræver en crosstrainer.");
+  if (c.forms.includes("row") && !c.equipment.includes("rower"))
+    issues.push("Roning kræver en romaskine.");
+  if (c.forms.includes("run") && c.level === "beginner")
+    issues.push(
+      "Sammenhængende løb kræver løbeerfaring. Vælg løb/gang eller gang som begyndervalg.",
+    );
   if (
-    c.forms.some((f) => ["walk", "walk-run"].includes(f)) &&
+    c.forms.some((f) => ["walk", "walk-run", "run"].includes(f)) &&
     !c.equipment.some((e) => ["outdoors", "treadmill"].includes(e))
   )
     issues.push("Gang og løb/gang kræver udendørs mulighed eller løbebånd.");
@@ -72,15 +78,10 @@ export function cardioOptions(
 ): CardioOption[] {
   const c = p.cardio;
   if (!c || !c.days) return [];
+  // Calendar time alone is not evidence of adaptation. A new duration requires acceptance.
   const minutes =
     c.level === "beginner"
-      ? Math.min(
-          c.minutes,
-          Math.round(
-            Math.min(c.minutes, rule.beginnerStart) *
-              (1 + rule.weeklyIncrease * (week - 1)),
-          ),
-        )
+      ? Math.min(c.minutes, rule.beginnerStart)
       : c.minutes;
   const intensity =
     c.intensity === "easy"
@@ -91,6 +92,8 @@ export function cardioOptions(
     cycle: "Cykling",
     "walk-run": "Løb/gang",
     elliptical: "Crosstrainer",
+    run: "Løb",
+    row: "Roning",
   };
   const out: CardioOption[] = [];
   for (const f of c.forms)

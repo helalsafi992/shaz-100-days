@@ -5,14 +5,8 @@ import {
   createDecipheriv,
 } from "node:crypto";
 import { db, schema } from "./db";
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { HttpError } from "./errors";
+export { HttpError } from "./errors";
 export const baseURL = () => process.env.APP_URL || "http://localhost:3100";
 export const hash = (v: string) => createHash("sha256").update(v).digest("hex");
 export const opaque = () => randomBytes(32).toString("base64url");
@@ -74,7 +68,14 @@ export function failure(e: unknown) {
     return Response.json({ error: e.message }, { status: e.status });
   if (e && typeof e === "object" && "issues" in e)
     return Response.json(
-      { error: "Kontrollér de indtastede oplysninger." },
+      {
+        error:
+          (e.issues as { code?: string; message?: string }[])
+            .filter((i) => i.code === "custom")
+            .map((i) => i.message)
+            .slice(0, 3)
+            .join(" ") || "Kontrollér de indtastede oplysninger.",
+      },
       { status: 400 },
     );
   console.error(

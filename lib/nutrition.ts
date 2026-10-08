@@ -37,7 +37,12 @@ export function targetFromMaintenance(maintenance: number, percent: number) {
 }
 export function estimate(
   p: Profile,
-  date = new Date().toISOString().slice(0, 10),
+  date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Copenhagen",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date()),
   rule: NutritionPolicy = nutritionRule,
 ) {
   const unavailable = (explanation: string) => ({
@@ -92,7 +97,10 @@ export function estimate(
     p.trainingActivity === "heavy" ||
     p.activity === "high" ||
     p.days + (p.cardio?.days || 0) >= 6 ||
-    p.days * p.minutes + (p.cardio?.days || 0) * (p.cardio?.minutes || 0) > 300;
+    (p.schedule?.reduce((sum, s) => sum + s.minutes, 0) ?? p.days * p.minutes) +
+      (p.cardio?.days || 0) * (p.cardio?.minutes || 0) +
+      (p.otherSport || []).reduce((sum, s) => sum + s.minutes, 0) >
+      300;
   const minimum = p.sex === "male" ? rule.minMale : rule.minFemale;
   const options = deficitLevels.map((level) => {
     const calc = targetFromMaintenance(maintenance, level.percent);

@@ -1,17 +1,77 @@
 import { z } from "zod";
 import { estimate } from "./nutrition";
+// Stored weekdays retain the original JS convention: Sunday=0, Monday=1.
+// UI ordering is explicitly Monday–Sunday; no historical dates are reinterpreted.
+export const weekdays = [1, 2, 3, 4, 5, 6, 0] as const;
+export const weekdayNames = [
+  "Søndag",
+  "Mandag",
+  "Tirsdag",
+  "Onsdag",
+  "Torsdag",
+  "Fredag",
+  "Lørdag",
+];
+export const equipmentValues = [
+  "bodyweight",
+  "dumbbells",
+  "band",
+  "machines",
+  "barbell",
+  "rack",
+  "bench",
+  "cable",
+  "leg-press",
+  "chest-press",
+  "leg-curl",
+  "lat-pull",
+  "pullup",
+] as const;
+export const durationValues = [20, 25, 30, 40, 45, 55, 60, 75] as const;
+const equipmentSchema = z.array(z.enum(equipmentValues)).min(1).max(14);
+const durationSchema = z
+  .number()
+  .refine(
+    (n) => (durationValues as readonly number[]).includes(n),
+    "Vælg en understøttet varighed.",
+  );
+export const locationSchema = z.object({
+  id: z.string().min(1).max(80),
+  name: z.string().min(1).max(60),
+  kind: z.enum(["home", "gym", "other"]),
+  equipment: equipmentSchema,
+  maxLoadKg: z.number().min(0).max(500).optional(),
+});
+export const scheduleSchema = z.object({
+  weekday: z.number().int().min(0).max(6),
+  locationId: z.string().min(1).max(80),
+  minutes: durationSchema,
+});
 export const profileFields = z.object({
   goal: z.enum(["fat-loss", "muscle", "fitness", "maintain"]),
-  level: z.enum(["beginner", "intermediate"]),
-  place: z.enum(["home", "gym"]),
-  equipment: z
-    .array(z.enum(["bodyweight", "dumbbells", "band", "machines", "barbell"]))
-    .min(1)
-    .max(5),
-  days: z.union([z.literal(2), z.literal(3), z.literal(4)]),
-  weekdays: z.array(z.number().int().min(0).max(6)).min(2).max(4),
-  minutes: z.union([z.literal(25), z.literal(40), z.literal(55)]),
+  level: z.enum(["beginner", "intermediate", "experienced"]),
+  place: z.enum(["home", "gym", "both"]),
+  equipment: equipmentSchema,
+  locations: z.array(locationSchema).min(1).max(5).optional(),
+  schedule: z.array(scheduleSchema).max(6).optional(),
+  weekdayConvention: z.literal("sunday-zero-v1").optional(),
+  otherSport: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(60),
+        weekday: z.number().int().min(0).max(6),
+        minutes: z.number().int().min(10).max(240),
+        hard: z.boolean(),
+      }),
+    )
+    .max(14)
+    .optional(),
+  days: z.number().int().min(0).max(6),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(6),
+  minutes: durationSchema,
   diet: z.enum(["all", "vegetarian", "halal"]),
+  halal: z.boolean().optional(),
+  householdSize: z.number().int().min(1).max(8).optional(),
   avoid: z.array(z.string().max(40)).max(40),
   cookTime: z.union([z.literal(15), z.literal(30), z.literal(60)]),
   nutrition: z.enum(["portions", "calculated"]),
@@ -40,18 +100,20 @@ export const profileFields = z.object({
   exerciseAvoid: z.array(z.string().max(100)).max(30).optional(),
   cardio: z
     .object({
-      days: z.number().int().min(0).max(4),
-      weekdays: z.array(z.number().int().min(0).max(6)).max(4),
+      days: z.number().int().min(0).max(6),
+      weekdays: z.array(z.number().int().min(0).max(6)).max(6),
       minutes: z.number().int().min(10).max(60),
       forms: z
-        .array(z.enum(["walk", "cycle", "walk-run", "elliptical"]))
+        .array(
+          z.enum(["walk", "cycle", "walk-run", "run", "elliptical", "row"]),
+        )
         .min(1)
-        .max(4),
+        .max(6),
       equipment: z
-        .array(z.enum(["outdoors", "bike", "treadmill", "elliptical"]))
+        .array(z.enum(["outdoors", "bike", "treadmill", "elliptical", "rower"]))
         .min(1)
-        .max(4),
-      level: z.enum(["beginner", "intermediate"]),
+        .max(5),
+      level: z.enum(["beginner", "intermediate", "experienced"]),
       intensity: z.enum(["easy", "moderate"]),
     })
     .optional(),
@@ -70,32 +132,61 @@ export const profileSchema = profileFields.superRefine((p, c) => {
       path: ["weekdays"],
       message: "Vælg det samme antal ugedage som træningsdage.",
     });
-  if (p.days <= 3 && p.weekdays.some((d) => p.weekdays.includes((d + 1) % 7)))
+  if (p.weekdays.length !== p.days)
     c.addIssue({
       code: "custom",
       path: ["weekdays"],
-      message: "Læg mindst én hviledag mellem helkropspassene.",
+      message: "Ugedage må ikke gentages.",
     });
-  if (
-    p.days === 4 &&
-    p.weekdays.some(
-      (d) =>
-        p.weekdays.includes((d + 1) % 7) && p.weekdays.includes((d + 2) % 7),
+  if (p.days >= 5)
+    c.addIssue({
+      code: "custom",
+      path: ["days"],
+      message:
+        p.level !== "experienced"
+          ? "5–6 styrkepas kræver erfaren træning og en fagligt godkendt split-skabelon. Vælg 2–4 pas eller ændr rytmen."
+          : "5–6-pas-skabeloner afventer faglig godkendelse. Vælg 4 pas eller færre; vi kopierer ikke helkrop seks gange.",
+    });
+  if (p.place === "both" && (!p.locations || !p.schedule))
+    c.addIssue({
+      code: "custom",
+      path: ["locations"],
+      message: "Ved Begge skal du vælge sted og tid for hver træningsdag.",
+    });
+  if (p.locations) {
+    if (new Set(p.locations.map((l) => l.id)).size !== p.locations.length)
+      c.addIssue({
+        code: "custom",
+        path: ["locations"],
+        message: "Lokationer skal have forskellige id'er.",
+      });
+    if (
+      p.schedule &&
+      (p.schedule.length !== p.days ||
+        new Set(p.schedule.map((s) => s.weekday)).size !== p.days ||
+        p.schedule.some(
+          (s) =>
+            !p.weekdays.includes(s.weekday) ||
+            !p.locations!.some((l) => l.id === s.locationId),
+        ))
     )
-  )
+      c.addIssue({
+        code: "custom",
+        path: ["schedule"],
+        message: "Vælg én gyldig lokation og varighed for hver styrkedag.",
+      });
+  }
+  const hardDays = new Set([
+    ...p.weekdays,
+    ...(p.otherSport || []).filter((s) => s.hard).map((s) => s.weekday),
+    ...(p.cardio?.intensity === "moderate" ? p.cardio.weekdays : []),
+  ]);
+  if (hardDays.size > 6)
     c.addIssue({
       code: "custom",
       path: ["weekdays"],
-      message: "Vælg højst to træningsdage i træk.",
-    });
-  if (
-    p.place === "home" &&
-    p.equipment.some((e) => ["machines", "barbell"].includes(e))
-  )
-    c.addIssue({
-      code: "custom",
-      path: ["equipment"],
-      message: "Vælg udstyr til hjemmet.",
+      message:
+        "Bevar mindst én dag uden hård træning. Reducér et hårdt pas eller flyt det til en anden aktiv dag.",
     });
   if (
     p.nutrition === "calculated" &&
@@ -135,8 +226,18 @@ export const labels: Record<string, string> = {
   fitness: "Bedre form",
   beginner: "Begynder",
   intermediate: "Let øvet",
+  experienced: "Erfaren",
   home: "Hjemme",
   gym: "Fitnesscenter",
+  both: "Hjemme + fitness",
+  rack: "Squat-rack med sikkerhedsstøtter",
+  bench: "Træningsbænk",
+  cable: "Kabelstation",
+  "leg-press": "Benpresmaskine",
+  "chest-press": "Brystpresmaskine",
+  "leg-curl": "Lårcurlmaskine",
+  "lat-pull": "Nedtræksmaskine",
+  pullup: "Pull-up-stang",
   all: "Spiser det meste",
   vegetarian: "Vegetarisk",
   halal: "Halal-egnet",
@@ -148,6 +249,51 @@ export const labels: Record<string, string> = {
   portions: "Portionsvejledning",
   calculated: "Beregnet energiindtag",
 };
+export type Location = z.infer<typeof locationSchema>;
+export function normalizeProfile(p: Profile): Profile {
+  const locations = p.locations?.length
+    ? p.locations
+    : [
+        {
+          id: "legacy-" + p.place,
+          name: labels[p.place] || "Min træning",
+          kind: p.place === "gym" ? ("gym" as const) : ("home" as const),
+          equipment: p.equipment,
+        },
+      ];
+  const schedule =
+    p.schedule ??
+    p.weekdays.map((weekday) => ({
+      weekday,
+      locationId: locations[0].id,
+      minutes: p.minutes,
+    }));
+  return {
+    ...p,
+    locations,
+    schedule,
+    weekdayConvention: "sunday-zero-v1",
+    halal: p.halal ?? p.diet === "halal",
+  };
+}
+export function sessionProfile(
+  p: Profile,
+  weekday: number,
+  override?: { locationId?: string; minutes?: number },
+): Profile {
+  const n = normalizeProfile(p),
+    slot = n.schedule!.find((s) => s.weekday === weekday),
+    location =
+      n.locations!.find(
+        (l) => l.id === (override?.locationId || slot?.locationId),
+      ) || n.locations![0];
+  return {
+    ...n,
+    equipment: location.equipment,
+    minutes: override?.minutes || slot?.minutes || p.minutes,
+    place: location.kind === "gym" ? "gym" : "home",
+  };
+}
 export function localDate(at = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Copenhagen",

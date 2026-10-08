@@ -27,11 +27,17 @@ const pretty = (d: string) =>
   });
 export function FoodSummary({ today }: { today: string }) {
   const [state, setState] = useState<State | null>(null);
+  const [error,setError]=useState("");
   useEffect(() => {
-    fetch("/api/plan/state?start=" + today)
-      .then((r) => (r.ok ? r.json() : null))
+    fetch("/api/plan/prepare-meals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start: today }),
+    })
+      .then(async(r)=>{if(!r.ok)throw Error((await r.json()).error);return fetch("/api/plan/state?start="+today);})
+      .then(async(r)=>{const d=await r.json();if(!r.ok)throw Error(d.error);return d;})
       .then(setState)
-      .catch(() => {});
+      .catch(e=>setError(e.message||"Madplanen kunne ikke indlæses. Prøv igen på Mad."));
   }, [today]);
   const day = state?.days.find((d) => d.date === today)?.data,
     q = day ? mealQuality(day) : null;
@@ -46,7 +52,7 @@ export function FoodSummary({ today }: { today: string }) {
           Se madplan →
         </a>
       </div>
-      {!day ? (
+      {error?<p role="alert" className="p-error">{error}</p>:!day ? (
         <p>Åbn madplanen og tilpas måltider og portioner.</p>
       ) : (
         <>
@@ -98,11 +104,17 @@ export default function FoodPlanner({
   today: string;
   recipes: Recipe[];
   library: ReactNode;
-  shopping: { week: string; ingredient_id: string; checked: boolean }[];
+  shopping: {
+    week: string;
+    ingredient_id: string;
+    checked: boolean;
+    checked_grams?: number | string;
+  }[];
   action: (path: string, data: unknown) => Promise<boolean>;
 }) {
   const [state, setState] = useState<State | null>(null),
     [date, setDate] = useState(today),
+    [shoppingDays,setShoppingDays]=useState(7),
     [tab, setTab] = useState("plan"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -114,18 +126,34 @@ export default function FoodPlanner({
     [recipe, setRecipe] = useState<MealOption | null>(null),
     [q, setQ] = useState(""),
     [amount, setAmount] = useState(1);
+  const [pendingChoice, setPendingChoice] = useState<MealOption | null>(null),
+    [showMore, setShowMore] = useState(false);
+  useEffect(() => {
+    setPendingChoice(null);
+    setShowMore(false);
+  }, [modal]);
   async function load(start = date) {
-    const r = await fetch("/api/plan/state?start=" + start, {
+    const prepared = await fetch("/api/plan/prepare-meals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start,count:shoppingDays }),
+    });
+    if (!prepared.ok) {
+      const d = await prepared.json();
+      throw Error(d.error || "Madplanen kunne ikke indlæses.");
+    }
+    const r = await fetch("/api/plan/state?start=" + start+"&count="+shoppingDays, {
       cache: "no-store",
     });
     const d = await r.json();
     if (!r.ok) throw Error(d.error);
     setState(d);
+    if(start<d.profile.start_date)setDate(d.profile.start_date);
     return d as State;
   }
   useEffect(() => {
     load(date).catch((e) => setError(e.message));
-  }, [date]);
+  }, [date,shoppingDays]);
   async function request(path: string, data: unknown) {
     setBusy(true);
     setError("");
@@ -260,6 +288,7 @@ export default function FoodPlanner({
           ) : tab === "shopping" ? (
             <section className="p-card">
               <h2>Kun det, du har valgt.</h2>
+              <label>Antal dage i indkøbet<select value={shoppingDays} onChange={e=>setShoppingDays(Number(e.target.value))}>{Array.from({length:14},(_,i)=><option value={i+1} key={i+1}>{i+1} {i?"dage":"dag"}</option>)}</select></label>
               <p>
                 Fra {pretty(date)} og de næste {state.days.length} dage. A-, B-
                 og C-alternativer tæller ikke med.
@@ -273,19 +302,28 @@ export default function FoodPlanner({
                         (s) =>
                           s.week === date &&
                           s.ingredient_id === i.id &&
-                          s.checked,
+                          s.checked &&
+                          Number(s.checked_grams || 0) >= i.grams,
                       )}
                       onChange={(ev) =>
                         action("shopping", {
                           week: date,
                           id: i.id,
                           on: ev.target.checked,
+                          count:shoppingDays,
                         })
                       }
                     />
                     <span>
                       {i.name}
                       <small>{i.basis}</small>
+                      {shopping.some(
+                        (s) =>
+                          s.week === date &&
+                          s.ingredient_id === i.id &&
+                          s.checked &&
+                          Number(s.checked_grams || 0) < i.grams,
+                      ) && <small>Øget behov — kontrollér mængden igen</small>}
                     </span>
                     <b>{i.grams} g</b>
                   </label>
@@ -311,14 +349,14 @@ export default function FoodPlanner({
                     </b>
                   </span>
                   <span>
-                    Protein
+                    Planlagt protein
                     <b>
                       {Math.round(quality.total.protein)}
                       <small>
                         {" "}
                         g
                         {day.proteinTarget
-                          ? " / " + day.proteinTarget + " g"
+                          ? " · Minimumsmål: " + day.proteinTarget + " g"
                           : ""}
                       </small>
                     </b>
@@ -426,19 +464,22 @@ export default function FoodPlanner({
                             Byt · {s.options.length} forslag
                           </button>
                           {s.selected && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setAmount(s.selected!.servings);
-                                  setModal({ slot: s, mode: "portion" });
-                                }}
-                              >
-                                Tilpas portion
-                              </button>
-                              <button onClick={() => meal(s, "remove")}>
-                                Fjern
-                              </button>
-                            </>
+                            <details className="meal-more">
+                              <summary>Flere handlinger</summary>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setAmount(s.selected!.servings);
+                                    setModal({ slot: s, mode: "portion" });
+                                  }}
+                                >
+                                  Tilpas portion
+                                </button>
+                                <button onClick={() => meal(s, "remove")}>
+                                  Fjern
+                                </button>
+                              </>
+                            </details>
                           )}
                         </>
                       )}
@@ -730,6 +771,25 @@ export default function FoodPlanner({
                 </select>
               </label>
               <label>
+                Personer til indkøb
+                <select
+                  value={form.householdSize || 1}
+                  onChange={(ev) =>
+                    field("householdSize", Number(ev.target.value))
+                  }
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                    <option key={n} value={n}>
+                      {n} {n === 1 ? "person" : "personer"}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Indkøb skaleres. Dit personlige kaloriemål og din portion
+                  ændres ikke.
+                </small>
+              </label>
+              <label>
                 Kostpræference
                 <select
                   value={form.diet}
@@ -737,8 +797,20 @@ export default function FoodPlanner({
                 >
                   <option value="all">Spiser det meste</option>
                   <option value="vegetarian">Vegetarisk</option>
-                  <option value="halal">Halal-egnet</option>
+                  {form.diet === "halal" && (
+                    <option value="halal">
+                      Halal-egnet (eksisterende valg)
+                    </option>
+                  )}
                 </select>
+              </label>
+              <label className="p-check">
+                <input
+                  type="checkbox"
+                  checked={form.halal || form.diet === "halal"}
+                  onChange={(ev) => field("halal", ev.target.checked)}
+                />
+                Halal-egnede ingredienstyper
               </label>
               <label>
                 Tilberedningstid
@@ -901,6 +973,7 @@ export default function FoodPlanner({
                       settings: form,
                       reviewAggressive: review,
                       expectedVersion: preview.version,
+                      fingerprint: preview.fingerprint,
                     });
                     if (d) {
                       await load();
@@ -994,14 +1067,12 @@ export default function FoodPlanner({
                       <button
                         className="p-button"
                         disabled={busy}
-                        onClick={() =>
-                          meal(modal.slot, "choose", {
-                            recipe: o.recipe.id,
-                            servings: o.servings,
-                          })
-                        }
+                        aria-pressed={pendingChoice?.recipe.id === o.recipe.id}
+                        onClick={() => setPendingChoice(o)}
                       >
-                        Vælg {"ABC"[i]}
+                        {pendingChoice?.recipe.id === o.recipe.id
+                          ? "Valgt"
+                          : "Vælg " + "ABC"[i]}
                       </button>
                     </article>
                   ))}
@@ -1009,49 +1080,73 @@ export default function FoodPlanner({
                 {modal.slot.issue && (
                   <p className="p-notice">{modal.slot.issue}</p>
                 )}
-                <h3>Andre egnede opskrifter</h3>
-                <input
-                  aria-label="Søg andre opskrifter"
-                  placeholder="Søg efter en ret"
-                  value={q}
-                  onChange={(ev) => setQ(ev.target.value)}
-                />
-                {recipes
-                  .filter(
-                    (r) =>
-                      suitable(r, p.diet, p.avoid, p.cookTime) &&
-                      r.name.toLowerCase().includes(q.toLowerCase()),
-                  )
-                  .map((r) => {
-                    const o = modal.slot.target
-                      ? optionFor(r, modal.slot.target)
-                      : portion(r, 1);
-                    return (
-                      <div className="p-list-row" key={r.id}>
-                        <span>
-                          {r.name}
-                          <small>
-                            {o
-                              ? `${o.servings} portion · ${Math.round(o.totals.kcal)} kcal · ${Math.round(o.totals.protein)} g protein`
-                              : "Passer ikke med realistisk portion til denne måltidsplads"}
-                          </small>
-                        </span>
-                        <button
-                          className="p-secondary"
-                          disabled={!o || busy}
-                          onClick={() =>
-                            o &&
-                            meal(modal.slot, "choose", {
-                              recipe: r.id,
-                              servings: o.servings,
-                            })
-                          }
-                        >
-                          Vælg
-                        </button>
-                      </div>
-                    );
-                  })}
+                <button
+                  className="p-secondary"
+                  onClick={() => setShowMore((v) => !v)}
+                >
+                  {showMore ? "Skjul øvrige retter" : "Se flere retter"}
+                </button>
+                {showMore && (
+                  <>
+                    <h3>Andre egnede opskrifter</h3>
+                    <input
+                      aria-label="Søg andre opskrifter"
+                      placeholder="Søg efter en ret"
+                      value={q}
+                      onChange={(ev) => setQ(ev.target.value)}
+                    />
+                    {recipes
+                      .filter(
+                        (r) =>
+                          suitable(r, p.diet, p.avoid, p.cookTime, p.halal) &&
+                          r.name.toLowerCase().includes(q.toLowerCase()),
+                      )
+                      .map((r) => {
+                        const o = modal.slot.target
+                          ? optionFor(r, modal.slot.target)
+                          : portion(r, 1);
+                        return (
+                          <div className="p-list-row" key={r.id}>
+                            <span>
+                              {r.name}
+                              <small>
+                                {o
+                                  ? `${o.servings} portion · ${Math.round(o.totals.kcal)} kcal · ${Math.round(o.totals.protein)} g protein`
+                                  : "Passer ikke med realistisk portion til denne måltidsplads"}
+                              </small>
+                            </span>
+                            <button
+                              className="p-secondary"
+                              disabled={!o || busy}
+                              onClick={() => o && setPendingChoice(o)}
+                            >
+                              Vælg
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </>
+                )}
+                <div className="swap-confirm">
+                  <p>
+                    {pendingChoice
+                      ? `Ny dagstotal: ${Math.round((quality?.total.kcal || 0) - (modal.slot.selected?.totals.kcal || 0) + pendingChoice.totals.kcal)} kcal · Kaloriemål: ${day?.target ?? "portioner"}`
+                      : "Vælg en ret. Intet ændres, før du bekræfter."}
+                  </p>
+                  <button
+                    className="p-button"
+                    disabled={busy || !pendingChoice}
+                    onClick={() =>
+                      pendingChoice &&
+                      meal(modal.slot, "choose", {
+                        recipe: pendingChoice.recipe.id,
+                        servings: pendingChoice.servings,
+                      })
+                    }
+                  >
+                    Bekræft bytte
+                  </button>
+                </div>
               </>
             )}
           </div>

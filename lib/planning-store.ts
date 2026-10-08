@@ -1,5 +1,5 @@
 import { db, transaction } from "./db";
-import { profile, activePeriod } from "./platform";
+import { profile, activePeriod, planningPeriod } from "./platform";
 import { catalog } from "./content";
 import { profileSchema, localDate, addDays, type Profile } from "./profile";
 import {
@@ -11,7 +11,7 @@ import {
 } from "./meal-plan";
 import { nutritionRule, estimate, type NutritionPolicy } from "./nutrition";
 import { suitable, type Recipe } from "./recipes";
-import { HttpError } from "./security";
+import { HttpError, hash } from "./security";
 import { isolatedTest } from "./test-environment";
 export async function requirePlanningRules(): Promise<NutritionPolicy> {
   await catalog("nutrition-rule");
@@ -32,7 +32,12 @@ export async function requirePlanningRules(): Promise<NutritionPolicy> {
     status: rows.rows[0].status,
   };
 }
-export async function mealDays(user: string, start = localDate(), count = 7) {
+export async function mealDays(
+  user: string,
+  start = localDate(),
+  count = 7,
+  prepare = true,
+) {
   const p = await profile(user);
   if (!p.start_date) return [];
   const first = start < p.start_date ? p.start_date : start,
@@ -56,7 +61,16 @@ export async function mealDays(user: string, start = localDate(), count = 7) {
   const missing = dates.filter(
     (date) => !existing.rows.some((d) => d.date === date),
   );
-  if (missing.length) {
+  if (prepare && missing.length) {
+    const calculation = estimate(p.data, localDate(), rule);
+    if (
+      p.data.nutrition === "calculated" &&
+      (!calculation.available || !calculation.allowed)
+    )
+      throw new HttpError(
+        409,
+        calculation.available ? calculation.reason : calculation.explanation,
+      );
     const oldRows = await db().query(
       "SELECT *,date::text FROM shaz_meals WHERE user_id=$1 AND date BETWEEN $2 AND $3 ORDER BY slot",
       [user, first, end],
@@ -71,10 +85,18 @@ export async function mealDays(user: string, start = localDate(), count = 7) {
         );
       return { date, data: day };
     });
-    await db().query(
-      "INSERT INTO shaz_meal_days(user_id,date,data) SELECT $1,date,data FROM jsonb_to_recordset($2::jsonb) AS item(date date,data jsonb) ON CONFLICT DO NOTHING",
-      [user, JSON.stringify(days)],
-    );
+    await transaction(async (c) => {
+      const locked = await c.query(
+        "SELECT version FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+        [user],
+      );
+      if (locked.rows[0]?.version !== p.version)
+        throw new HttpError(409, "Profilen er ændret. Indlæs madplanen igen.");
+      await c.query(
+        "INSERT INTO shaz_meal_days(user_id,date,data) SELECT $1,date,data FROM jsonb_to_recordset($2::jsonb) AS item(date date,data jsonb) ON CONFLICT DO NOTHING",
+        [user, JSON.stringify(days)],
+      );
+    });
     existing = await read();
   }
   return existing.rows.map((d) => ({ ...d, quality: mealQuality(d.data) }));
@@ -85,7 +107,7 @@ export async function nutritionChange(
   confirm: boolean,
 ) {
   const rule = await requirePlanningRules();
-  const old = await activePeriod(user);
+  const old = await planningPeriod(user);
   const keys = [
     "goal",
     "nutrition",
@@ -106,6 +128,8 @@ export async function nutritionChange(
     "mealTimes",
     "deficitLevel",
     "diet",
+    "halal",
+    "householdSize",
     "avoid",
     "cookTime",
   ];
@@ -177,8 +201,24 @@ export async function nutritionChange(
     ] as (keyof Profile)[])
       delete p[key];
   const rs = (await catalog("recipe")) as Recipe[];
-  const existing = await mealDays(user, localDate(), 1);
-  const preview = makeMealDay(p, localDate(), rs, existing[0]?.data, rule);
+  const previewDate =
+    old.start_date > localDate() ? old.start_date : localDate();
+  const existing = (
+    await db().query(
+      "SELECT data,version FROM shaz_meal_days WHERE user_id=$1 AND date=$2",
+      [user, previewDate],
+    )
+  ).rows;
+  const preview = makeMealDay(p, previewDate, rs, existing[0]?.data, rule);
+  const mealVersions = (
+    await db().query(
+      "SELECT date::text,version FROM shaz_meal_days WHERE user_id=$1 AND date>=$2 ORDER BY date",
+      [user, localDate()],
+    )
+  ).rows;
+  const fingerprint = hash(
+    JSON.stringify({ profile: p, version: old.version, mealVersions }),
+  );
   if (!confirm)
     return {
       profile: p,
@@ -186,7 +226,13 @@ export async function nutritionChange(
       day: preview,
       quality: mealQuality(preview),
       version: old.version,
+      fingerprint,
     };
+  if (input.fingerprint !== fingerprint)
+    throw new HttpError(
+      409,
+      "Madplanen eller dine valg er ændret. Se en ny forhåndsvisning.",
+    );
   await transaction(async (c) => {
     const locked = await c.query(
       "SELECT version FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
@@ -202,9 +248,18 @@ export async function nutritionChange(
       [user, JSON.stringify(p)],
     );
     const days = await c.query(
-      "SELECT date::text,data FROM shaz_meal_days WHERE user_id=$1 AND date>=$2 FOR UPDATE",
+      "SELECT date::text,data,version FROM shaz_meal_days WHERE user_id=$1 AND date>=$2 ORDER BY date FOR UPDATE",
       [user, localDate()],
     );
+    if (
+      JSON.stringify(
+        days.rows.map((d) => ({ date: d.date, version: d.version })),
+      ) !== JSON.stringify(mealVersions)
+    )
+      throw new HttpError(
+        409,
+        "Et måltid blev ændret fra en anden session. Se en ny forhåndsvisning.",
+      );
     for (const d of days.rows)
       await c.query(
         "UPDATE shaz_meal_days SET data=$3,version=version+1,updated_at=now() WHERE user_id=$1 AND date=$2",
@@ -228,8 +283,23 @@ export async function editMeal(
     expectedVersion: number;
   },
 ) {
-  const p = await activePeriod(user);
-  await requirePlanningRules();
+  const p = await planningPeriod(user);
+  const policy = await requirePlanningRules();
+  if (
+    !["eaten", "skipped", "reopen"].includes(v.action) &&
+    p.data.nutrition === "calculated"
+  ) {
+    const energy = estimate(
+      p.data,
+      localDate() > v.date ? localDate() : v.date,
+      policy,
+    );
+    if (!energy.available || !energy.allowed)
+      throw new HttpError(
+        409,
+        energy.available ? energy.reason : energy.explanation,
+      );
+  }
   if (v.date < p.start_date || v.date > addDays(p.start_date, 99))
     throw new HttpError(400, "Vælg en dato i dine 100 dage.");
   const rs = (await catalog("recipe")) as Recipe[];
@@ -272,7 +342,10 @@ export async function editMeal(
             ? s.previous?.recipe.id
             : v.recipe || s.selected?.recipe.id;
         const r = rs.find((r) => r.id === recipeId);
-        if (!r || !suitable(r, p.data.diet, p.data.avoid, p.data.cookTime))
+        if (
+          !r ||
+          !suitable(r, p.data.diet, p.data.avoid, p.data.cookTime, p.data.halal)
+        )
           throw new HttpError(
             400,
             "Opskriften passer ikke til dine kostvalg og udelukkelser.",

@@ -7,6 +7,7 @@ import {
   localDate,
   dayNumber,
   addDays,
+  normalizeProfile,
 } from "./profile";
 import { generatePlan, Exercise, DayPlan } from "./training";
 import { catalog } from "./content";
@@ -18,18 +19,20 @@ export async function profile(user: string) {
     "SELECT *,start_date::text FROM shaz_profile WHERE user_id=$1",
     [user],
   );
-  return (
-    r.rows[0] || {
-      user_id: user,
-      step: 0,
-      data: { ...defaults, startDate: localDate() },
-      start_date: null,
-      version: 1,
-    }
-  );
+  const result = r.rows[0] || {
+    user_id: user,
+    step: 0,
+    data: { ...defaults, startDate: localDate() },
+    start_date: null,
+    version: 1,
+  };
+  result.data = normalizeProfile(result.data);
+  return result;
 }
 export async function saveProfile(user: string, data: unknown, step: number) {
-  const p = (step < 7 ? profileFields : profileSchema).parse(data);
+  const p = normalizeProfile(
+    (step < 7 ? profileFields : profileSchema).parse(data),
+  );
   const old = await profile(user);
   p.deficitReviewUntil = old.data.deficitReviewUntil;
   p.aggressiveDaysUsed = old.data.aggressiveDaysUsed;
@@ -51,7 +54,7 @@ export async function saveProfile(user: string, data: unknown, step: number) {
 }
 export async function activate(user: string) {
   const old = await profile(user);
-  const p = profileSchema.parse(old.data);
+  const p = normalizeProfile(profileSchema.parse(old.data));
   validatePlanProfile(p);
   if (p.startDate < localDate() || p.startDate > addDays(localDate(), 90))
     throw new HttpError(
@@ -200,7 +203,7 @@ export async function snapshot(user: string) {
   const [days, meals, favorites, checks, weights, shopping, rs, xs] =
     await Promise.all([
       db().query(
-        "SELECT id,day,scheduled_date::text,plan,status,log,completed_at FROM shaz_days WHERE user_id=$1 ORDER BY day",
+        "SELECT id,day,scheduled_date::text,plan,status,log,completed_at,revision FROM shaz_days WHERE user_id=$1 ORDER BY day",
         [user],
       ),
       db().query(
@@ -219,7 +222,7 @@ export async function snapshot(user: string) {
         [user],
       ),
       db().query(
-        "SELECT week,ingredient_id,checked FROM shaz_shopping WHERE user_id=$1",
+        "SELECT week,ingredient_id,checked,checked_grams FROM shaz_shopping WHERE user_id=$1",
         [user],
       ),
       catalog("recipe"),
@@ -295,8 +298,17 @@ export async function activePeriod(user: string) {
     );
   return p;
 }
+export async function planningPeriod(user: string) {
+  const p = await profile(user);
+  if (!p.start_date || dayNumber(p.start_date) > 100)
+    throw new HttpError(
+      403,
+      "Planlægning er tilgængelig fra valgt start og gennem dine 100 dage.",
+    );
+  return p;
+}
 
-function validatePlanProfile(p: Profile) {
+export function validatePlanProfile(p: Profile) {
   const issues = weekProblems(p);
   if (issues.length) throw new HttpError(400, issues.join(" "));
   if (p.nutrition === "calculated") {

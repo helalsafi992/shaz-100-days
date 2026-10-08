@@ -1,0 +1,859 @@
+/* SHAZ master design. Scoped to the authenticated product and account forms. */
+.portal .p-header {
+  margin: 0;
+  height: auto;
+  max-width: none;
+}
+.portal .p-grid {
+  align-items: start;
+}
+@media (min-width: 1001px) {
+  .portal .p-header {
+    height: 100dvh;
+    margin: 0;
+  }
+}
+.portal {
+  --paper: #f5f6f2;
+  --ink: #17201b;
+  --muted: #667168;
+  --line: #e5e9e1;
+  --lime: #d9f66f;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.portal h1,
+.portal h2,
+.portal h3 {
+  font-family: inherit;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+.portal h1,
+.portal .p-page-heading h1,
+.portal .today-heading h1,
+.portal .food-planner h1 {
+  font-size: 32px;
+  margin: 8px 0 16px;
+  max-width: none;
+}
+.portal h2 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.portal h3 {
+  font-size: 18px;
+}
+.portal p {
+  margin: 12px 0 16px;
+}
+.portal .p-eyebrow {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.portal .p-note,
+.portal .p-muted,
+.portal small,
+.portal .status {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.portal button,
+.portal summary,
+.portal .p-button,
+.portal .p-secondary,
+.portal .profile-link {
+  min-height: 44px;
+  min-width: 44px;
+}
+.portal label {
+  font-size: 16px;
+}
+.portal input,
+.portal select,
+.portal textarea {
+  font-size: 16px !important;
+}
+.portal .p-card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px #17201b04;
+  margin-bottom: 20px;
+}
+.portal .p-button {
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 16px;
+  border: 1px solid #c7e460;
+  border-radius: 10px;
+}
+.portal .p-secondary {
+  background: white;
+  color: #32664b;
+  border: 1px solid var(--line);
+  font-size: 16px;
+}
+.portal .chosen {
+  background: #17201b !important;
+  color: white !important;
+  border-color: #17201b;
+}
+.portal .review-banner {
+  padding: 6px 0;
+  font-size: 14px;
+  background: transparent;
+  color: #626d58;
+  letter-spacing: 0;
+  margin-bottom: 12px;
+  border: 0;
+}
+.portal .today-heading {
+  padding: 0;
+  margin: 0 0 20px;
+}
+.portal .p-page-heading {
+  margin: 0 0 24px;
+  display: block;
+}
+.portal .p-page-heading p {
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 65ch;
+}
+.portal .primary-card {
+  background: #192d23;
+  color: white;
+  position: relative;
+  padding: 28px;
+  min-height: 250px;
+}
+.portal .primary-card .p-eyebrow {
+  color: #b9c8bc;
+}
+.portal .primary-card h2 {
+  font-size: 32px;
+  line-height: 1.1;
+  margin: 20px 0 16px;
+  max-width: 80%;
+}
+.portal .primary-card p {
+  color: #d2ded4;
+  max-width: 58ch;
+}
+.portal .primary-card .p-pills {
+  margin: 12px 0 20px;
+}
+.portal .primary-card .p-pills span {
+  border: 0;
+  padding: 0 14px 0 0;
+  color: #d2ded4;
+  font-size: 16px;
+}
+.portal .activity-adjust {
+  display: block;
+  background: transparent;
+  color: #d9f66f;
+  text-align: left;
+  margin-top: 10px;
+  padding: 8px 0;
+}
+.portal .p-metrics {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 18px;
+  margin: 20px 0;
+  padding: 20px;
+  gap: 16px;
+}
+.portal .p-metrics b {
+  font-size: 28px;
+}
+.portal .p-metrics span {
+  font-size: 14px;
+}
+.portal .p-metrics small {
+  font-size: 14px;
+  margin-top: 4px;
+}
+.portal .p-week {
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-top: 20px;
+}
+.portal .p-week button {
+  padding: 12px 6px;
+  background: #f5f6f2;
+  color: #17201b;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-width: 0;
+}
+.portal .p-week .training {
+  background: #eaf0e6;
+}
+.portal .p-week b {
+  font-size: 14px;
+}
+.portal .p-week span {
+  font-size: 14px;
+}
+.portal .p-week small {
+  font-size: 14px;
+}
+.portal .training-weeks {
+  margin: 20px 0;
+}
+.portal .training-weeks > details {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin: 12px 0;
+  overflow: hidden;
+}
+.portal .training-weeks > details > summary {
+  padding: 18px;
+  font-size: 16px;
+}
+.portal .calendar-day {
+  padding: 16px;
+  border-top: 1px solid var(--line);
+}
+.portal .training-day {
+  background: #f5f6f2;
+  padding: 16px;
+  border-radius: 12px;
+  margin: 8px 0;
+  gap: 12px;
+}
+.portal .training-day > span:first-child {
+  font-size: 14px;
+  color: #32664b;
+}
+.portal .training-day:has(button:last-child[aria-label*="cardio"]) {
+  color: #567c9e;
+}
+.portal .p-pills span {
+  font-size: 14px;
+}
+.portal .p-list-row {
+  gap: 16px;
+  padding: 14px 0;
+}
+.portal .p-list-row span,
+.portal .p-list-row b {
+  min-width: 0;
+}
+.portal .food-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+.portal .food-tabs button {
+  flex: 1;
+  background: transparent;
+  border-radius: 0;
+  font-size: 16px;
+  color: #667168;
+  padding: 12px 8px;
+}
+.portal .food-tabs button[aria-selected="true"] {
+  color: #17201b;
+  border-bottom: 3px solid #32664b;
+  background: transparent;
+}
+.portal .daily-nutrition {
+  padding: 20px;
+}
+.portal .nutrition-strip {
+  gap: 16px;
+}
+.portal .nutrition-strip span {
+  font-size: 14px;
+}
+.portal .nutrition-strip b {
+  font-size: 24px;
+}
+.portal .nutrition-strip small {
+  font-size: 14px;
+}
+.portal .meal-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.portal .meal-card {
+  padding: 20px;
+  margin: 0;
+  overflow: hidden;
+}
+.portal .meal-card h2 {
+  font-size: 20px;
+  margin: 16px 0 12px;
+}
+.portal .meal-image {
+  height: 180px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #eef0e8;
+}
+.portal .image-caption {
+  font-size: 14px;
+  color: #667168;
+  margin-top: 4px;
+}
+.portal .meal-actions {
+  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+}
+.portal .meal-actions button {
+  border: 1px solid var(--line);
+  background: white;
+  font-size: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+.portal .meal-actions > button:nth-child(2) {
+  background: #f0f7d9;
+  color: #32664b;
+}
+.portal .meal-more {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 4px;
+}
+.portal .meal-more summary {
+  font-size: 16px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+.portal .meal-more button {
+  margin: 4px;
+}
+.portal .p-overlay {
+  background: #17201b80;
+  backdrop-filter: blur(4px);
+  padding: 24px;
+  z-index: 130;
+}
+.portal .p-dialog {
+  background: #fff;
+  border-radius: 18px;
+  max-width: 780px;
+  padding: 28px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.portal .p-dialog h2 {
+  font-size: 26px;
+  padding-right: 40px;
+}
+.portal .dialog-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  background: #f5f6f2;
+  border: 1px solid #e5e9e1;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  z-index: 3;
+  font-size: 24px;
+}
+.portal .meal-alternatives {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.portal .meal-alternatives article {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 8px 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+.portal .meal-alternatives article img {
+  grid-row: 1/5;
+  height: 110px;
+  width: 110px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.portal .meal-alternatives h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.portal .meal-alternatives p {
+  margin: 0;
+  font-size: 14px;
+}
+.portal .meal-alternatives button {
+  grid-column: 2;
+}
+.portal .swap-confirm {
+  position: sticky;
+  bottom: -28px;
+  background: white;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  z-index: 2;
+}
+.portal .workout-focus {
+  padding: 16px;
+}
+.portal .workout-dialog {
+  width: 100%;
+  max-width: 760px;
+}
+.portal .exercise-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.portal .exercise-steps button {
+  background: #f5f6f2;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.portal .exercise-block {
+  padding: 20px 0;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+.portal .exercise-block h3 {
+  font-size: 24px;
+}
+.portal .exercise-block .p-section-head {
+  align-items: start;
+}
+.portal .exercise-block details {
+  margin: 12px 0;
+}
+.portal .warmup {
+  background: #f5f6f2;
+  border-radius: 12px;
+  padding: 8px 16px;
+}
+.portal .warmup summary {
+  padding: 10px 0;
+  font-weight: 600;
+}
+.portal .workout-footer {
+  position: sticky;
+  bottom: -28px;
+  background: white;
+  padding: 16px 0;
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+}
+body:has(.workout-focus) .p-mobile-nav {
+  display: none;
+}
+.portal .draft-status {
+  font-size: 14px;
+  color: #32664b;
+}
+.portal .set-row {
+  grid-template-columns: 38px repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.portal .set-labels {
+  grid-template-columns: 38px repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  font-size: 14px;
+}
+.portal .set-row input {
+  padding: 10px 4px;
+  min-width: 0;
+  text-align: center;
+}
+.portal .rest-timer {
+  position: sticky;
+  bottom: 72px;
+  background: #17201b;
+  color: white;
+  border-radius: 12px;
+  z-index: 2;
+}
+.portal .location-settings,
+.portal .training-settings > details {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 16px;
+  border-radius: 15px;
+  margin: 16px 0;
+}
+.portal .equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+.portal .schedule-slot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+.portal .schedule-slot h3 {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.portal .schedule-slot label {
+  margin: 4px 0;
+}
+.portal .p-check {
+  min-height: 44px;
+  align-items: center;
+}
+.portal .p-choices button {
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+.portal .weekday-picker button {
+  padding: 8px 4px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+.portal .onboard-shell {
+  max-width: 800px;
+}
+.portal.onboarding {
+  padding-bottom: 40px;
+}
+.portal .p-notice,
+.portal .p-error {
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 16px;
+}
+.portal .p-error {
+  color: #862e2e;
+  background: #fff0ed;
+}
+.portal .plan-ok {
+  color: #32664b;
+  font-size: 14px;
+}
+.test-environment-banner {
+  font-size: 14px;
+  padding: 5px 16px;
+  background: #e9efdb;
+  color: #37472b;
+  min-height: 30px;
+  line-height: 20px;
+}
+@media (min-width: 1001px) {
+  .portal:has(> .p-header) {
+    padding-left: 222px;
+  }
+  .portal .p-header {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 222px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 30px 18px;
+    gap: 32px;
+    background: #fff;
+    border-right: 1px solid var(--line);
+    z-index: 40;
+  }
+  .portal .p-header .logo {
+    font-size: 32px;
+    padding: 0 14px;
+  }
+  .portal .p-header nav {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .portal .p-header nav a {
+    padding: 14px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 16px;
+    min-height: 48px;
+  }
+  .portal .p-header nav a.current {
+    background: #17201b;
+    color: white;
+    border: 0;
+  }
+  .portal .p-header .profile-link {
+    margin-top: auto;
+    padding: 14px;
+  }
+  .portal .p-main {
+    max-width: 1180px;
+    margin: auto;
+    padding: 32px 32px 60px;
+  }
+  .portal .p-grid {
+    grid-template-columns: 1.3fr 1fr;
+    gap: 20px;
+  }
+  .portal .p-mobile-nav {
+    display: none;
+  }
+  .test-environment-banner:has(+ .portal) {
+    padding-left: 254px;
+  }
+}
+@media (min-width: 761px) and (max-width: 1000px) {
+  .portal .p-header {
+    padding: 16px 24px;
+    gap: 16px;
+  }
+  .portal .p-header nav {
+    gap: 16px;
+  }
+  .portal .p-header nav a {
+    font-size: 16px;
+  }
+  .portal .p-main {
+    padding: 24px;
+  }
+  .portal .p-grid {
+    grid-template-columns: 1fr;
+  }
+  .portal .p-mobile-nav {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .portal h1,
+  .portal .p-page-heading h1,
+  .portal .today-heading h1,
+  .portal .food-planner h1 {
+    font-size: 27px;
+  }
+  .portal .p-header {
+    padding: 12px 16px;
+    gap: 12px;
+    min-height: 72px;
+    background: white;
+  }
+  .portal .p-header .logo {
+    font-size: 28px;
+  }
+  .portal .p-header .logo span {
+    font-size: 9px;
+    display: none;
+  }
+  .portal .p-header nav {
+    display: none;
+  }
+  .portal .p-header .profile-link {
+    display: flex;
+    align-items: center;
+    font-size: 16px;
+  }
+  .portal .p-main {
+    padding: 16px 16px calc(100px + env(safe-area-inset-bottom));
+  }
+  .portal .review-banner {
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+  .portal .p-card {
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .portal .p-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .portal .primary-card {
+    padding: 24px;
+    min-height: 0;
+  }
+  .portal .primary-card h2 {
+    font-size: 30px;
+    max-width: 100%;
+    margin: 16px 0;
+  }
+  .portal .primary-card p {
+    display: none;
+  }
+  .portal .primary-card .activity-adjust {
+    font-size: 14px;
+    min-height: 44px;
+  }
+  .portal .p-week {
+    overflow-x: auto;
+    grid-template-columns: repeat(7, minmax(54px, 1fr));
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+  .portal .p-week button {
+    padding: 10px 4px;
+  }
+  .portal .p-week b {
+    font-size: 12px;
+  }
+  .portal .p-week span {
+    font-size: 12px;
+  }
+  .portal .p-week small {
+    font-size: 12px;
+  }
+  .portal .p-metrics {
+    padding: 16px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .portal .p-metrics > div {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 0;
+  }
+  .portal .p-metrics > div:last-child {
+    border: 0;
+  }
+  .portal .p-metrics b {
+    font-size: 24px;
+  }
+  .portal .meal-cards {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .portal .meal-card {
+    margin: 0;
+  }
+  .portal .nutrition-strip {
+    grid-template-columns: 1fr 1fr;
+    display: grid;
+    gap: 16px;
+  }
+  .portal .nutrition-strip span:last-child {
+    grid-column: 1/-1;
+  }
+  .portal .food-tabs {
+    gap: 2px;
+  }
+  .portal .food-tabs button {
+    font-size: 14px;
+    padding: 12px 4px;
+  }
+  .portal .p-section-head {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .portal .p-overlay {
+    padding: 12px 0 0;
+    align-items: end;
+  }
+  .portal .p-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 12px);
+    border-radius: 18px 18px 0 0;
+    padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
+    margin: 0;
+  }
+  .portal .p-dialog h2 {
+    font-size: 25px;
+  }
+  .portal .meal-alternatives article {
+    grid-template-columns: 80px 1fr;
+    padding: 12px;
+    gap: 8px 12px;
+  }
+  .portal .meal-alternatives article img {
+    width: 80px;
+    height: 90px;
+  }
+  .portal .swap-confirm {
+    bottom: calc(-24px - env(safe-area-inset-bottom));
+    padding: 16px 0 calc(16px + env(safe-area-inset-bottom));
+  }
+  .portal .workout-focus {
+    padding: 0;
+  }
+  .portal .workout-dialog {
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .portal .workout-footer {
+    bottom: calc(-24px - env(safe-area-inset-bottom));
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+  }
+  .portal .equipment-grid {
+    grid-template-columns: 1fr;
+  }
+  .portal .p-mobile-nav {
+    position: fixed;
+    inset: auto 0 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    background: #fffffff5;
+    border-top: 1px solid var(--line);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    z-index: 60;
+    backdrop-filter: blur(10px);
+  }
+  .portal .p-mobile-nav a {
+    min-height: 58px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #667168;
+    padding: 4px;
+  }
+  .portal .p-mobile-nav a span {
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .portal .p-mobile-nav a.current {
+    color: #17201b;
+    background: #f0f7d9;
+    border-radius: 12px;
+  }
+  .portal .onboard-shell {
+    padding: 16px;
+  }
+  .portal .training-day {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .portal .training-day > div {
+    flex: 1;
+    min-width: 130px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal *,
+  .portal *::before,
+  .portal *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

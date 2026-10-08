@@ -4,6 +4,7 @@ import { activityForDate, activityCounts } from "@/lib/activity";
 import { useWorkoutDraft } from "./useWorkoutDraft";
 import FoodPlanner, { FoodSummary } from "./FoodPlanner";
 import CardioPlanner, { type CardioRow } from "./CardioPlanner";
+import SessionAdjustment from "./SessionAdjustment";
 import { labels, energy, addDays, type Profile } from "@/lib/profile";
 import {
   nutrients,
@@ -93,14 +94,18 @@ export default function Portal({
     [busy, setBusy] = useState(false),
     [selected, setSelected] = useState<Day | null>(null),
     [weekStart, setWeekStart] = useState(initial.today),
+    [selectedWeek, setSelectedWeek] = useState(
+      Math.max(1, Math.min(15, Math.ceil(initial.day / 7))),
+    ),
     [cardioOpen, setCardioOpen] = useState<string | undefined>();
+  const [adjustId, setAdjustId] = useState<string | null>(null);
   const p = state.profile.data;
   const complete = state.days.filter(
     (d) => d.plan.kind === "workout" && d.status === "completed",
   );
   const counts = activityCounts(state.days, state.cardio || []);
   const calendar = (date: string) =>
-    activityForDate(date, state.days, state.cardio || []);
+    activityForDate(date, state.days, state.cardio || [], p.otherSport || []);
   const today = state.days.find((d) => d.scheduled_date === state.today);
   const cardioToday = (state.cardio || []).find(
     (c) =>
@@ -221,14 +226,18 @@ export default function Portal({
                     ? `${counts.strength} styrkepas og ${counts.cardio} cardiopas.`
                     : today?.plan.kind !== "workout" && cardioToday
                       ? cardioToday.plan.selected.title
-                      : today?.plan.title || "Gør plads til din nye rytme."}
+                      : calendar(state.today).otherSport.length
+                        ? calendar(state.today)
+                            .otherSport.map((s) => s.name)
+                            .join(" + ")
+                        : today?.plan.title || "Gør plads til din nye rytme."}
                 </h2>
                 {today?.plan.kind === "workout" ? (
                   <>
                     <div className="p-pills">
                       <span>{today.plan.minutes} min.</span>
                       <span>{today.plan.exercises.length} øvelser</span>
-                      <span>{labels[p.place]}</span>
+                      <span>{today.plan.locationName || labels[p.place]}</span>
                     </div>
                     <p>
                       Varm op. Følg rækkefølgen. Registrér det, du faktisk
@@ -242,6 +251,14 @@ export default function Portal({
                         ? "Se og ret registrering"
                         : "Start træning →"}
                     </button>
+                    {today.status !== "completed" && (
+                      <button
+                        className="activity-adjust"
+                        onClick={() => setAdjustId(today.id)}
+                      >
+                        Andet sted eller mindre tid i dag
+                      </button>
+                    )}
                     {cardioToday && (
                       <p>
                         Dertil: {cardioToday.plan.selected.title} ·{" "}
@@ -257,7 +274,9 @@ export default function Portal({
                         ? "Vælg to vaner, du vil fortsætte med. Sammenlign dine første og seneste registreringer i Fremgang. Du behøver ikke sætte en personlig rekord for at afslutte godt."
                         : cardioToday
                           ? `${cardioToday.plan.selected.minutes} minutters cardio. ${cardioToday.plan.selected.intensity}`
-                          : "En restitutionsdag er en del af planen. Du skal ikke indhente et misset pas i dag."}
+                          : calendar(state.today).otherSport.length
+                            ? "Din anden sport indgår i ugeplanens belastning. Der tilføjes ikke automatisk ekstra træning."
+                            : "En restitutionsdag er en del af planen. Du skal ikke indhente et misset pas i dag."}
                     </p>
                     <a
                       className="p-button"
@@ -354,13 +373,21 @@ export default function Portal({
               showList={false}
             />
             <div className="training-weeks">
-              {Array.from({ length: 15 }, (_, i) => i + 1).map((week) => (
-                <details
-                  key={week}
-                  open={
-                    week === Math.max(1, Math.min(15, Math.ceil(state.day / 7)))
-                  }
+              <label>
+                Vælg uge
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(Number(e.target.value))}
                 >
+                  {Array.from({ length: 15 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      Uge {i + 1} · Dag {i * 7 + 1}–{Math.min(100, (i + 1) * 7)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {[selectedWeek].map((week) => (
+                <details key={week} open>
                   <summary>
                     <span>UGE {String(week).padStart(2, "0")}</span>
                     <b>
@@ -385,7 +412,8 @@ export default function Portal({
                               <b>{d.plan.title}</b>
                               <small>
                                 {d.plan.minutes} min. ·{" "}
-                                {d.plan.exercises.length} øvelser
+                                {d.plan.exercises.length} øvelser ·{" "}
+                                {d.plan.locationName || labels[p.place]}
                               </small>
                             </div>
                             <span className={"status " + d.status}>
@@ -438,6 +466,18 @@ export default function Portal({
                               </button>
                             </div>
                           ))}
+                        {calendar(d.scheduled_date).otherSport.map((s, i) => (
+                          <div className="training-day" key={"sport-" + i}>
+                            <span>ANDEN SPORT</span>
+                            <div>
+                              <b>{s.name}</b>
+                              <small>
+                                {s.minutes} min. ·{" "}
+                                {s.hard ? "Høj belastning" : "Let/moderat"}
+                              </small>
+                            </div>
+                          </div>
+                        ))}
                         {!calendar(d.scheduled_date).hasActivity && (
                           <p className="p-note">
                             {d.plan.kind === "finish"
@@ -617,6 +657,14 @@ export default function Portal({
           </a>
         ))}
       </nav>
+      {adjustId && (
+        <SessionAdjustment
+          id={adjustId}
+          profile={p}
+          close={() => setAdjustId(null)}
+          onSaved={refreshState}
+        />
+      )}
       {selected && (
         <Workout
           day={selected}
@@ -728,7 +776,7 @@ function FoodLibrary({
       r.name.toLocaleLowerCase("da").includes(q.toLocaleLowerCase("da")) &&
       (cat === "all" || r.category === cat) &&
       (!fav || state.favorites.includes(r.id)) &&
-      suitable(r, p.diet, p.avoid, p.cookTime) &&
+      suitable(r, p.diet, p.avoid, p.cookTime, p.halal) &&
       suitable(r, diet, [], 60),
   );
   return (
@@ -985,7 +1033,8 @@ function Workout({
     readonly,
   );
   const [remaining, setRemaining] = useState(0),
-    [move, setMove] = useState("");
+    [move, setMove] = useState(""),
+    [focusIndex, setFocusIndex] = useState(0);
   useEffect(() => {
     const t = setInterval(
       () => setRemaining(Math.max(0, Math.ceil((end - Date.now()) / 1000))),
@@ -998,7 +1047,7 @@ function Workout({
   }
   return (
     <div
-      className="p-overlay"
+      className="p-overlay workout-focus"
       role="dialog"
       aria-modal="true"
       aria-label="Træningspas"
@@ -1085,18 +1134,38 @@ function Workout({
             </select>
           </section>
         ))}
-        <p className="p-note">
-          {state.help?.find((h) => h.id === "safety")?.text}
-        </p>
-        <div className="warmup">
-          <h3>Start med opvarmning</h3>
+        <details>
+          <summary>Sikkerhed og teknik</summary>
+          <p className="p-note">
+            {state.help?.find((h) => h.id === "safety")?.text}
+          </p>
+        </details>
+        <details className="warmup">
+          <summary>Start med opvarmning</summary>
           <ol>
             {day.plan.warmup.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ol>
-        </div>
+        </details>
+        <nav className="exercise-steps" aria-label="Øvelsesoversigt">
+          {day.plan.exercises.map((e, i) => (
+            <button
+              key={e.id}
+              className={i === focusIndex ? "chosen" : ""}
+              aria-label={e.name}
+              aria-current={i === focusIndex ? "step" : undefined}
+              onClick={() => {
+                void flush();
+                setFocusIndex(i);
+              }}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </nav>
         {day.plan.exercises.map((e, index) => {
+          if (index !== focusIndex) return null;
           const history = state.days
             .filter(
               (d) =>
@@ -1111,7 +1180,14 @@ function Workout({
                 [],
             )
             .filter((x) => x.length);
-          const options = alternatives(e, state.profile.data, state.exercises);
+          const options = alternatives(
+            e,
+            {
+              ...state.profile.data,
+              equipment: day.plan.equipment || state.profile.data.equipment,
+            },
+            state.exercises,
+          );
           return (
             <section className="exercise-block" key={e.id}>
               <div className="p-section-head">
@@ -1120,7 +1196,9 @@ function Workout({
                   <h3>{e.name}</h3>
                 </div>
                 <span>
-                  {e.sets} × {e.min}–{e.max}
+                  {e.sets} ×{" "}
+                  {e.unit === "seconds" ? "15–25 sek." : `${e.min}–${e.max}`}
+                  {e.perSide ? " pr. side" : ""}
                 </span>
               </div>
               <p>{e.intensity}</p>
@@ -1157,7 +1235,7 @@ function Workout({
               )}
               <div className="set-labels">
                 <span>Sæt</span>
-                <span>Gentagelser</span>
+                <span>{e.unit === "seconds" ? "Sekunder" : "Reps"}</span>
                 <span>Kg*</span>
                 <span>RPE**</span>
               </div>
@@ -1168,7 +1246,12 @@ function Workout({
                       <b>{s.set}</b>
                       <input
                         type="number"
-                        aria-label={e.name + " sæt " + s.set + " gentagelser"}
+                        aria-label={
+                          e.name +
+                          " sæt " +
+                          s.set +
+                          (e.unit === "seconds" ? " sekunder" : " gentagelser")
+                        }
                         min="0"
                         max="100"
                         value={s.reps || ""}
@@ -1296,31 +1379,50 @@ function Workout({
             </button>
           </div>
         )}
-        <div className="p-actions">
+        <div className="p-actions workout-footer">
           <button
             className="p-secondary"
-            disabled={busy || readonly}
-            onClick={() => flush()}
-          >
-            Gem sæt
-          </button>
-          <button
-            className="p-button"
-            disabled={busy || readonly}
-            onClick={async () => {
-              if (
-                (await flush()) &&
-                (await action("workout", { id: day.id, sets, complete: true }))
-              )
-                close();
+            disabled={focusIndex === 0}
+            onClick={() => {
+              void flush();
+              setFocusIndex((i) => Math.max(0, i - 1));
             }}
           >
-            {busy
-              ? "Gemmer…"
-              : day.status === "completed"
-                ? "Gem rettelse"
-                : "Afslut træning ✓"}
+            Forrige
           </button>
+          {focusIndex < day.plan.exercises.length - 1 ? (
+            <button
+              className="p-button"
+              onClick={() => {
+                void flush();
+                setFocusIndex((i) => i + 1);
+              }}
+            >
+              Næste øvelse →
+            </button>
+          ) : (
+            <button
+              className="p-button"
+              disabled={busy || readonly}
+              onClick={async () => {
+                if (
+                  (await flush()) &&
+                  (await action("workout", {
+                    id: day.id,
+                    sets,
+                    complete: true,
+                  }))
+                )
+                  close();
+              }}
+            >
+              {busy
+                ? "Gemmer…"
+                : day.status === "completed"
+                  ? "Gem rettelse"
+                  : "Afslut træning ✓"}
+            </button>
+          )}
         </div>
         {!readonly && day.status === "planned" && (
           <details>

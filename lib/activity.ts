@@ -3,6 +3,12 @@ export function activityForDate(
   date: string,
   days: { scheduled_date: string; status: string; plan: { kind: string } }[],
   cardio: { scheduled_date: string; status: string }[],
+  sport: {
+    weekday: number;
+    name: string;
+    minutes: number;
+    hard: boolean;
+  }[] = [],
 ) {
   const strength = days.find(
     (d) => d.scheduled_date === date && d.plan.kind === "workout",
@@ -12,9 +18,13 @@ export function activityForDate(
   );
   const activeStrength = !!strength && strength.status !== "skipped";
   const activeCardio = conditioning.some((c) => c.status !== "skipped");
+  const otherSport = sport.filter(
+    (s) => s.weekday === new Date(date + "T12:00:00Z").getUTCDay(),
+  );
   return {
     strength,
     cardio: conditioning,
+    otherSport,
     label:
       activeStrength && activeCardio
         ? "Styrke + cardio"
@@ -22,10 +32,12 @@ export function activityForDate(
           ? "Styrke"
           : activeCardio
             ? "Cardio"
-            : strength || conditioning.length
-              ? "Pas sprunget over"
-              : "Restitution",
-    hasActivity: activeStrength || activeCardio,
+            : otherSport.length
+              ? "Anden sport"
+              : strength || conditioning.length
+                ? "Pas sprunget over"
+                : "Restitution",
+    hasActivity: activeStrength || activeCardio || otherSport.length > 0,
   };
 }
 export function activityCounts(

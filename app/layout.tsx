@@ -2,6 +2,7 @@ import DialogAccessibility from "@/components/DialogAccessibility";
 import { isolatedTest } from "@/lib/test-environment";
 import type { Metadata } from "next";
 import "./globals.css";
+import "./customer.css";
 export const metadata: Metadata = {
   title: "SHAZ — 100 DAY TRANSFORMATION",
   description:

@@ -663,7 +663,11 @@ try {
         );
         const save = await planpost(
           "nutrition-confirm",
-          { ...body, expectedVersion: preview.data.version },
+          {
+            ...body,
+            expectedVersion: preview.data.version,
+            fingerprint: preview.data.fingerprint,
+          },
           u.headers,
         );
         assert.equal(save.status, 200, JSON.stringify(save.data));
@@ -1176,6 +1180,227 @@ try {
         });
     },
   );
+  await check(
+    "T03/S01: hybrid changes are scoped, atomic, preview-bound and reject concurrent confirmations",
+    async () => {
+      const u = users[2],
+        old = await snapshot(u.id);
+      const input = {
+        data: {
+          ...old.profile.data,
+          place: "both",
+          locations: [
+            {
+              id: "home",
+              name: "Homegym",
+              kind: "home",
+              equipment: ["bodyweight", "dumbbells", "band"],
+            },
+            {
+              id: "gym",
+              name: "Center",
+              kind: "gym",
+              equipment: ["bodyweight", "cable", "leg-press", "dumbbells"],
+            },
+          ],
+          schedule: old.profile.data.weekdays.map(
+            (weekday: number, i: number) => ({
+              weekday,
+              locationId: i === 1 ? "home" : "gym",
+              minutes: i === 1 ? 25 : 45,
+            }),
+          ),
+        },
+      };
+      const preview = await planpost("training-preview", input, u.headers);
+      assert.equal(preview.status, 200, JSON.stringify(preview.data));
+      const confirm = {
+        ...input,
+        expectedVersion: preview.data.version,
+        fingerprint: preview.data.fingerprint,
+      };
+      assert.equal(
+        (
+          await planpost(
+            "training-confirm",
+            {
+              ...confirm,
+              data: {
+                ...input.data,
+                goal: input.data.goal === "maintain" ? "fitness" : "maintain",
+              },
+            },
+            u.headers,
+          )
+        ).status,
+        409,
+      );
+      const results = await Promise.all([
+        planpost("training-confirm", confirm, u.headers),
+        planpost("training-confirm", confirm, u.headers),
+      ]);
+      assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+      const before = await snapshot(u.id),
+        target = before.days.find(
+          (d) => d.plan.kind === "workout" && d.scheduled_date > today,
+        )!;
+      const one = {
+        id: target.id,
+        locationId: "home",
+        minutes: 20,
+        scope: "session",
+      };
+      const pp = await planpost("training-preview", one, u.headers);
+      assert.equal(pp.status, 200, JSON.stringify(pp.data));
+      assert.equal(pp.data.changes.length, 1);
+      assert.equal(
+        (
+          await planpost(
+            "training-confirm",
+            {
+              ...one,
+              expectedVersion: pp.data.version,
+              fingerprint: pp.data.fingerprint,
+            },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      const after = await snapshot(u.id);
+      assert.equal(after.days.find((d) => d.id === target.id).plan.minutes, 20);
+      assert.equal(
+        after.days.find((d) => d.id === target.id).plan.exercises.length,
+        3,
+      );
+      assert.deepEqual(
+        after.days.filter((d) => d.id !== target.id),
+        before.days.filter((d) => d.id !== target.id),
+      );
+    },
+  );
+  await check(
+    "A06: concurrent paid events cannot reopen a refund received before fulfillment",
+    async () => {
+      const reference = crypto.randomUUID(),
+        checkout = "cs_late_paid",
+        payment = "pi_refunded_first";
+      await db().query(
+        "INSERT INTO shaz_checkout(id,token_hash,checkout_id) VALUES($1,$2,$3)",
+        [reference, hash("late-fixture"), checkout],
+      );
+      const refund = {
+        id: "evt_refund_first",
+        type: "charge.refunded",
+        livemode: false,
+        data: { object: { payment_intent: payment, amount_refunded: 39900 } },
+      } as unknown as Stripe.Event;
+      await processEvent(refund);
+      const paid = {
+        id: checkout,
+        client_reference_id: reference,
+        payment_status: "paid",
+        mode: "payment",
+        amount_total: 39900,
+        currency: "dkk",
+        livemode: false,
+        metadata: { product: "shaz-100-days" },
+        line_items: {
+          data: [{ price: { id: env.STRIPE_PRICE_ID }, quantity: 1 }],
+        },
+        customer_details: { email: "late@example.invalid" },
+        payment_intent: payment,
+      } as unknown as Stripe.Checkout.Session;
+      await Promise.all(
+        [1, 2].map((i) =>
+          processEvent(
+            {
+              id: "evt_late_" + i,
+              type: "checkout.session.completed",
+              livemode: false,
+              data: { object: paid },
+            } as Stripe.Event,
+            async () => paid,
+          ),
+        ),
+      );
+      const orders = await db().query(
+        "SELECT status,refunded_amount FROM shaz_orders WHERE checkout_id=$1",
+        [checkout],
+      );
+      assert.equal(orders.rowCount, 1);
+      assert.equal(orders.rows[0].status, "refunded");
+      assert.equal(orders.rows[0].refunded_amount, 39900);
+    },
+  );
+  await check(
+    "M05/S04: read-only plan GET and unauthenticated idempotent withdrawal receipt",
+    async () => {
+      const { GET: planGet } = await import("../app/api/plan/[...path]/route");
+      const u = users[2];
+      const before = (
+        await db().query(
+          "SELECT count(*)::int n FROM shaz_meal_days WHERE user_id=$1",
+          [u.id],
+        )
+      ).rows[0].n;
+      assert.equal(
+        (
+          await planGet(
+            new Request(
+              env.APP_URL + "/api/plan/state?start=" + addDays(today, 70),
+              { headers: u.headers },
+            ),
+          )
+        ).status,
+        200,
+      );
+      assert.equal(
+        (
+          await db().query(
+            "SELECT count(*)::int n FROM shaz_meal_days WHERE user_id=$1",
+            [u.id],
+          )
+        ).rows[0].n,
+        before,
+      );
+      const { POST: request } = await import("../app/api/requests/route");
+      const key = crypto.randomUUID();
+      const payload = {
+        kind: "withdrawal",
+        name: "Fiktiv Kunde",
+        email: "withdrawal@example.invalid",
+        orderReference: "fixture-order",
+        message: "Jeg vil fortryde aftalen.",
+        confirmed: true,
+        idempotencyKey: key,
+      };
+      const call = () =>
+        request(
+          new Request(env.APP_URL + "/api/requests", {
+            method: "POST",
+            headers: {
+              origin: env.APP_URL,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }),
+        );
+      const a = await call();
+      assert.equal(a.status, 200, await a.clone().text());
+      const first = await a.json();
+      const second = await (await call()).json();
+      assert.equal(first.id, second.id);
+    },
+  );
+  await check("T10/N02: empty/future completion and expired aggressive meals are denied by API",async()=>{
+    const u=users[2],state=await snapshot(u.id),todaySession=state.days.find(d=>d.scheduled_date===today&&d.plan.kind==="workout"),future=state.days.find(d=>d.scheduled_date>today&&d.plan.kind==="workout");
+    assert.equal((await post("workout",{id:todaySession.id,complete:true,sets:[]},u.headers)).status,400);
+    assert.equal((await post("workout",{id:future.id,complete:true,sets:[]},u.headers)).status,400);
+    const row=(await mealDays(u.id,today,1))[0];const old=state.profile.data;
+    await db().query("UPDATE shaz_profile SET data=$2 WHERE user_id=$1",[u.id,JSON.stringify({...old,goal:"fat-loss",deficitLevel:"aggressive",deficitReviewUntil:addDays(today,-1)})]);
+    try{assert.equal((await planpost("meal",{date:today,slot:row.data.slots.find((s:any)=>s.status==="planned").id,action:"remove",expectedVersion:row.version},u.headers)).status,409);}finally{await db().query("UPDATE shaz_profile SET data=$2 WHERE user_id=$1",[u.id,JSON.stringify(old)]);}
+  });
   // Browser is started in this process tree so it shares the isolated test network.
   const { chromium: pw } = await import("playwright-core");
 
@@ -1219,7 +1444,7 @@ try {
   await check(
     "Mobile and desktop browser routes, real authenticated UI, no horizontal overflow or client exceptions",
     async () => {
-      for (const width of [390, 1440]) {
+      for (const width of [320, 390, 430, 768, 1440]) {
         const context = await browser.newContext({
           viewport: { width, height: width === 390 ? 844 : 1000 },
         });
@@ -1381,8 +1606,13 @@ try {
       assert.ok(
         await dialog.evaluate((d) => d.contains(document.activeElement)),
       );
+      const beforeCancel=await (await context.request.get(env.APP_URL+"/api/plan/state")).json();
+      await dialog.getByRole("button",{name:"Vælg B",exact:true}).click();
       await page.keyboard.press("Escape");
       await dialog.waitFor({ state: "hidden" });
+      const afterCancel=await (await context.request.get(env.APP_URL+"/api/plan/state")).json();
+      assert.deepEqual(afterCancel.days,beforeCancel.days,"Closing pending choice must not persist it");
+      await page.getByText("Flere handlinger", { exact: true }).first().click();
       await page
         .getByRole("button", { name: "Tilpas portion", exact: true })
         .first()
@@ -1465,7 +1695,6 @@ try {
         await page.getByLabel(label!, { exact: true }).inputValue(),
         "13",
       );
-      await page.getByRole("button", { name: "Gem sæt", exact: true }).click();
       await page.getByText("✓ Gemt på din konto", { exact: true }).waitFor();
       await page.reload();
       await page.getByRole("button", { name: "Start træning →" }).click();
@@ -1609,6 +1838,8 @@ try {
         .click();
       assert.ok(await page.getByRole("timer").isVisible());
       await page.getByRole("button", { name: "Stop", exact: true }).click();
+      while (await page.getByRole("button", { name: "Næste øvelse →" }).count())
+        await page.getByRole("button", { name: "Næste øvelse →" }).click();
       await page.getByRole("button", { name: "Gem rettelse" }).click();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       await page.goto(env.APP_URL + "/app/food");

@@ -6,6 +6,7 @@ export default function Login({ test = false }: { test?: boolean }) {
     [email, setEmail] = useState(""),
     [name, setName] = useState(""),
     [password, setPassword] = useState(""),
+    [showPassword, setShowPassword] = useState(false),
     [token, setToken] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
@@ -169,7 +170,7 @@ export default function Login({ test = false }: { test?: boolean }) {
             <label>
               Adgangskode
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 autoComplete={
                   mode === "login" ? "current-password" : "new-password"
                 }
@@ -185,6 +186,16 @@ export default function Login({ test = false }: { test?: boolean }) {
                 </small>
               )}
             </label>
+          )}
+          {["login", "signup", "reset"].includes(mode) && (
+            <button
+              type="button"
+              className="p-secondary"
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? "Skjul adgangskode" : "Vis adgangskode"}
+            </button>
           )}
           <button className="p-button" disabled={busy}>
             {busy

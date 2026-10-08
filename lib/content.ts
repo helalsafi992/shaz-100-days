@@ -17,9 +17,9 @@ export function seedContent() {
         id: String(i + 1),
         data: { text: x },
       })),
-      ...["home", "gym"].flatMap((place) =>
-        ["beginner", "intermediate"].flatMap((level) =>
-          [2, 3, 4].map((days) => ({
+      ...["home", "gym", "both"].flatMap((place) =>
+        ["beginner", "intermediate", "experienced"].flatMap((level) =>
+          [0, 1, 2, 3, 4].map((days) => ({
             kind: "template",
             id: `${place}-${level}-${days}`,
             data: {
@@ -48,7 +48,7 @@ export function seedContent() {
       },
     ];
     await db().query(
-      "INSERT INTO shaz_content(kind,id,version,status,data) SELECT kind,id,1,'review',data FROM jsonb_to_recordset($1::jsonb) AS item(kind text,id text,data jsonb) ON CONFLICT DO NOTHING",
+      "INSERT INTO shaz_content(kind,id,version,status,data) SELECT kind,id,CASE WHEN kind IN ('exercise','template') THEN 2 ELSE 1 END,'review',data FROM jsonb_to_recordset($1::jsonb) AS item(kind text,id text,data jsonb) ON CONFLICT DO NOTHING",
       [JSON.stringify(entries)],
     );
   })().catch((e) => {

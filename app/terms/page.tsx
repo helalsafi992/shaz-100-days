@@ -12,7 +12,7 @@ export default function Terms() {
           <p className="p-notice">
             Salg er lukket. Vilkårene er et udkast til kundeplatformen og skal
             færdiggøres med virksomhedens oplysninger og juridiske gennemgang
-            før køb åbnes. Forhåndsvisningen på /preview tager ikke betaling.
+            før køb åbnes. Der tages ikke betaling, mens salget er lukket.
           </p>
         )}
         <h2>Produkt og pris</h2>
@@ -49,9 +49,9 @@ export default function Terms() {
           betaling og bekræftelse af køberens e-mail.
         </p>
         <p>
-          Ordrebekræftelse og loginlink sendes til den adresse, du skriver hos
-          Stripe. Linket gælder i 15 minutter og kan bruges én gang. Et nyt link
-          kan bestilles på login-siden. Ved forsinket bekræftelse vises en
+          Ordrebekræftelse og e-mailverifikation sendes til din konto-e-mail.
+          Dit login med e-mail og adgangskode bevares under betalingen.
+          Ved forsinket bekræftelse vises en
           ventetilstand; betal ikke igen uden først at kontrollere ordren.
         </p>
         <h2>Start og adgangsperiode</h2>
@@ -65,6 +65,7 @@ export default function Terms() {
           livstidsadgang.
         </p>
         <h2>Fortrydelse og refundering</h2>
+        <p><a className="p-button" href="/withdraw">Fortryd aftale</a></p>
         <p>
           Den planlagte løsning behandles som en tidsbegrænset digital tjeneste
           med tilknyttet digitalt indhold. Den endelige klassifikation skal

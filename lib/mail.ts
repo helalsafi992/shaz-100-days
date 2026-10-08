@@ -16,10 +16,22 @@ export async function sendMail(
   return key;
 }
 function message(kind: string, p: Payload) {
-  if (kind === "verify-email" || kind === "password-reset") return {
-    subject: kind === "verify-email" ? "Bekræft din SHAZ-konto" : "Vælg en ny adgangskode til SHAZ",
-    text: `Åbn linket og bekræft i browseren:\n${p.url}\n\nLinket udløber efter én time. Del det ikke. Hvis du ikke har bedt om dette, kan du ignorere mailen.`,
-  };
+  if (kind === "request-receipt")
+    return {
+      subject:
+        p.kind === "withdrawal"
+          ? "SHAZ · Din fortrydelse er modtaget"
+          : "SHAZ · Din henvendelse er modtaget",
+      text: `Sagsnummer: ${p.id}\nModtaget: ${p.createdAt}\n\n${p.statement}\n\nHenvendelsen er gemt og afventer behandling. En modtaget fortrydelse er ikke i sig selv en gennemført tilbagebetaling.\nHjælp: ${baseURL()}/help`,
+    };
+  if (kind === "verify-email" || kind === "password-reset")
+    return {
+      subject:
+        kind === "verify-email"
+          ? "Bekræft din SHAZ-konto"
+          : "Vælg en ny adgangskode til SHAZ",
+      text: `Åbn linket og bekræft i browseren:\n${p.url}\n\nLinket udløber efter én time. Del det ikke. Hvis du ikke har bedt om dette, kan du ignorere mailen.`,
+    };
   if (kind === "login")
     return {
       subject: "Dit sikre login til SHAZ",
@@ -55,8 +67,9 @@ export async function deliver(id: string) {
       return;
     }
     if (
-      m.kind === "login" &&
-      Date.now() - new Date(m.created_at).getTime() > 14 * 60 * 1000
+      ["login", "verify-email", "password-reset"].includes(m.kind) &&
+      Date.now() - new Date(m.created_at).getTime() >
+        (m.kind === "login" ? 14 : 59) * 60 * 1000
     ) {
       await db().query(
         "UPDATE shaz_mail SET status='expired',payload=NULL,error_code='REQUEST_NEW_LOGIN' WHERE id=$1",
@@ -78,6 +91,13 @@ export async function deliver(id: string) {
     }
     if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)
       throw new Error("MAIL_NOT_CONFIGURED");
+    if (m.email.toLowerCase().endsWith(".example")) {
+      await db().query(
+        "UPDATE shaz_mail SET status='suppressed',payload=NULL,error_code='FICTIONAL_ADDRESS' WHERE id=$1",
+        [id],
+      );
+      return;
+    }
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -92,7 +112,12 @@ export async function deliver(id: string) {
       }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!resp.ok) throw new Error("PROVIDER_REJECTED");
+    if (!resp.ok)
+      throw new Error(
+        resp.status === 429 || resp.status >= 500
+          ? "DELIVERY_FAILED"
+          : "PROVIDER_REJECTED",
+      );
     const result = await resp.json();
     await db().query(
       "UPDATE shaz_mail SET provider_id=$2,status='sent',payload=NULL,error_code=NULL WHERE id=$1",
@@ -105,7 +130,7 @@ export async function deliver(id: string) {
         ? e.message
         : "DELIVERY_FAILED";
     await db().query(
-      "UPDATE shaz_mail SET status='failed',error_code=$2 WHERE id=$1",
+      "UPDATE shaz_mail SET status='failed',error_code=$2,next_attempt_at=now()+(POWER(2,attempts)*30)*interval '1 second',attempts=CASE WHEN $2='PROVIDER_REJECTED' THEN 5 ELSE attempts END WHERE id=$1",
       [id, code],
     );
   }

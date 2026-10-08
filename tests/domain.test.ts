@@ -13,6 +13,7 @@ import {
   exercises,
   phase,
   progression,
+  hasEquipment,
 } from "../lib/training";
 import {
   recipes,
@@ -49,14 +50,9 @@ test("12 program variants contain exactly 100 meaningful days and equipment-safe
         assert.ok(plan.some((d) => d.kind === "rest"));
         for (const d of plan)
           for (const e of d.exercises) {
-            assert.ok(
-              e.equipment.every((x) => p.equipment.includes(x as never)),
-            );
+            assert.ok(hasEquipment(e, p));
             assert.ok(e.instructions.length >= 3);
-            for (const a of alternatives(e, p))
-              assert.ok(
-                a.equipment.every((x) => p.equipment.includes(x as never)),
-              );
+            for (const a of alternatives(e, p)) assert.ok(hasEquipment(a, p));
           }
         fingerprints.add(
           JSON.stringify(
@@ -132,7 +128,7 @@ test("calculation is bounded, optional and not changed by one weight", () => {
   assert.equal(energy({ ...p, weight: 45 })?.available, false);
   assert.ok(Math.abs(energy({ ...p, goal: "fat-loss" })!.adjustment!) <= 300);
 });
-test("progression requires two successful sessions, recovery gaps required", () => {
+test("progression requires two successful sessions; consecutive chosen days use a split", () => {
   assert.ok(
     progression([[{ reps: 12, kg: 10, effort: 7 }]]).includes("mindst to"),
   );
@@ -148,11 +144,16 @@ test("progression requires two successful sessions, recovery gaps required", () 
       [{ reps: 8, kg: 10, effort: 9 }],
     ]).includes("Behold"),
   );
-  assert.throws(() =>
-    profileSchema.parse({
-      ...defaults,
-      weekdays: [1, 2, 3],
-      startDate: "2026-10-12",
-    }),
+  const consecutive = profileSchema.parse({
+    ...defaults,
+    weekdays: [1, 2, 3],
+    startDate: "2026-10-12",
+  });
+  assert.deepEqual(
+    generatePlan(consecutive)
+      .filter((d) => d.kind === "workout")
+      .slice(0, 3)
+      .map((d) => d.split),
+    ["upper", "lower", "upper"],
   );
 });
