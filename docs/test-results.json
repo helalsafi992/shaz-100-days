@@ -1,0 +1,76 @@
+{
+  "at": "2026-10-08T11:27:44.356Z",
+  "database": "Isolated PGlite PostgreSQL via wire protocol",
+  "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
+  "email": "Encrypted local mail capture; no actual mailbox delivery",
+  "results": [
+    {
+      "name": "Three simulated paid journeys: webhook → captured e-mail → verified login → saved onboarding → activation → workout",
+      "status": "passed"
+    },
+    {
+      "name": "Amount, currency, product/price, paid status and test/live validation reject mismatches",
+      "status": "passed"
+    },
+    {
+      "name": "Stripe signature verification accepts signed fixtures, rejects tampering; live network not used",
+      "status": "passed"
+    },
+    {
+      "name": "Unauthenticated access, customer-to-customer IDs, admin role and CSRF are denied",
+      "status": "passed"
+    },
+    {
+      "name": "Single-use links, expiration, resend and a second authenticated device",
+      "status": "passed"
+    },
+    {
+      "name": "Vegetarian exclusions, meal swap, portions, weekly plan, saved favorites and shopping checks",
+      "status": "passed"
+    },
+    {
+      "name": "Future changes preserve completed snapshots; recovery suggestion requires acceptance and is idempotent",
+      "status": "passed"
+    },
+    {
+      "name": "Refund request belongs to buyer, signed refund/dispute events revoke access and preserve receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Verified invitation controls owner role; content versions, real approval and audit are enforced",
+      "status": "passed"
+    },
+    {
+      "name": "Actual PostgreSQL physical backup restores into a second isolated database",
+      "status": "passed"
+    },
+    {
+      "name": "Mobile and desktop browser routes, real authenticated UI, no horizontal overflow or client exceptions",
+      "status": "passed"
+    },
+    {
+      "name": "Browser login verification and refresh keep account data; logout rejects protected state",
+      "status": "passed"
+    },
+    {
+      "name": "Day 101 is a readable summary and refuses writes",
+      "status": "passed"
+    },
+    {
+      "name": "App process restart retains orders, sessions, plans and logged sets",
+      "status": "passed"
+    },
+    {
+      "name": "Browser workout editor, portions modal, admin UI and public preview assets",
+      "status": "passed"
+    },
+    {
+      "name": "Signed Resend delivery webhooks are idempotent and never erase bounce suppression",
+      "status": "passed"
+    },
+    {
+      "name": "Data export and deletion remove customer data while retaining separate order evidence",
+      "status": "passed"
+    }
+  ]
+}
