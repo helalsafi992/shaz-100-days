@@ -13,6 +13,8 @@ import {
 } from "@/lib/meal-plan";
 import { estimate, deficitLevels } from "@/lib/nutrition";
 import { addDays, type Profile } from "@/lib/profile";
+import { shoppingGroups, displayMass } from "@/lib/shopping";
+import BatchMeal from "./BatchMeal";
 type Row = { date: string; data: MealDay; version: number };
 type State = {
   profile: { data: Profile; version: number; start_date: string };
@@ -27,17 +29,28 @@ const pretty = (d: string) =>
   });
 export function FoodSummary({ today }: { today: string }) {
   const [state, setState] = useState<State | null>(null);
-  const [error,setError]=useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
     fetch("/api/plan/prepare-meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ start: today }),
     })
-      .then(async(r)=>{if(!r.ok)throw Error((await r.json()).error);return fetch("/api/plan/state?start="+today);})
-      .then(async(r)=>{const d=await r.json();if(!r.ok)throw Error(d.error);return d;})
+      .then(async (r) => {
+        if (!r.ok) throw Error((await r.json()).error);
+        return fetch("/api/plan/state?start=" + today);
+      })
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw Error(d.error);
+        return d;
+      })
       .then(setState)
-      .catch(e=>setError(e.message||"Madplanen kunne ikke indlæses. Prøv igen på Mad."));
+      .catch((e) =>
+        setError(
+          e.message || "Madplanen kunne ikke indlæses. Prøv igen på Mad.",
+        ),
+      );
   }, [today]);
   const day = state?.days.find((d) => d.date === today)?.data,
     q = day ? mealQuality(day) : null;
@@ -52,7 +65,11 @@ export function FoodSummary({ today }: { today: string }) {
           Se madplan →
         </a>
       </div>
-      {error?<p role="alert" className="p-error">{error}</p>:!day ? (
+      {error ? (
+        <p role="alert" className="p-error">
+          {error}
+        </p>
+      ) : !day ? (
         <p>Åbn madplanen og tilpas måltider og portioner.</p>
       ) : (
         <>
@@ -114,7 +131,7 @@ export default function FoodPlanner({
 }) {
   const [state, setState] = useState<State | null>(null),
     [date, setDate] = useState(today),
-    [shoppingDays,setShoppingDays]=useState(7),
+    [shoppingDays, setShoppingDays] = useState(7),
     [tab, setTab] = useState("plan"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -128,6 +145,7 @@ export default function FoodPlanner({
     [amount, setAmount] = useState(1);
   const [pendingChoice, setPendingChoice] = useState<MealOption | null>(null),
     [showMore, setShowMore] = useState(false);
+  const [batchSlot, setBatchSlot] = useState<MealSlot | null>(null);
   useEffect(() => {
     setPendingChoice(null);
     setShowMore(false);
@@ -136,24 +154,27 @@ export default function FoodPlanner({
     const prepared = await fetch("/api/plan/prepare-meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ start,count:shoppingDays }),
+      body: JSON.stringify({ start, count: shoppingDays }),
     });
     if (!prepared.ok) {
       const d = await prepared.json();
       throw Error(d.error || "Madplanen kunne ikke indlæses.");
     }
-    const r = await fetch("/api/plan/state?start=" + start+"&count="+shoppingDays, {
-      cache: "no-store",
-    });
+    const r = await fetch(
+      "/api/plan/state?start=" + start + "&count=" + shoppingDays,
+      {
+        cache: "no-store",
+      },
+    );
     const d = await r.json();
     if (!r.ok) throw Error(d.error);
     setState(d);
-    if(start<d.profile.start_date)setDate(d.profile.start_date);
+    if (start < d.profile.start_date) setDate(d.profile.start_date);
     return d as State;
   }
   useEffect(() => {
     load(date).catch((e) => setError(e.message));
-  }, [date,shoppingDays]);
+  }, [date, shoppingDays]);
   async function request(path: string, data: unknown) {
     setBusy(true);
     setError("");
@@ -288,47 +309,75 @@ export default function FoodPlanner({
           ) : tab === "shopping" ? (
             <section className="p-card">
               <h2>Kun det, du har valgt.</h2>
-              <label>Antal dage i indkøbet<select value={shoppingDays} onChange={e=>setShoppingDays(Number(e.target.value))}>{Array.from({length:14},(_,i)=><option value={i+1} key={i+1}>{i+1} {i?"dage":"dag"}</option>)}</select></label>
+              <label>
+                Antal dage i indkøbet
+                <select
+                  value={shoppingDays}
+                  onChange={(e) => setShoppingDays(Number(e.target.value))}
+                >
+                  {Array.from({ length: 14 }, (_, i) => (
+                    <option value={i + 1} key={i + 1}>
+                      {i + 1} {i ? "dage" : "dag"}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <p>
                 Fra {pretty(date)} og de næste {state.days.length} dage. A-, B-
                 og C-alternativer tæller ikke med.
               </p>
-              <div className="shopping-grid">
-                {mealShopping(state.days.map((d) => d.data)).map((i) => (
-                  <label className="shopping-item" key={i.id}>
-                    <input
-                      type="checkbox"
-                      checked={shopping.some(
-                        (s) =>
-                          s.week === date &&
-                          s.ingredient_id === i.id &&
-                          s.checked &&
-                          Number(s.checked_grams || 0) >= i.grams,
-                      )}
-                      onChange={(ev) =>
-                        action("shopping", {
-                          week: date,
-                          id: i.id,
-                          on: ev.target.checked,
-                          count:shoppingDays,
-                        })
-                      }
-                    />
-                    <span>
-                      {i.name}
-                      <small>{i.basis}</small>
-                      {shopping.some(
-                        (s) =>
-                          s.week === date &&
-                          s.ingredient_id === i.id &&
-                          s.checked &&
-                          Number(s.checked_grams || 0) < i.grams,
-                      ) && <small>Øget behov — kontrollér mængden igen</small>}
-                    </span>
-                    <b>{i.grams} g</b>
-                  </label>
-                ))}
-              </div>
+              {state.days.some((d) =>
+                d.data.slots.some((s) => s.batch && s.batch.cookDate < date),
+              ) && (
+                <p className="p-notice">
+                  Intervallet indeholder rester fra en tidligere madlavningsdag.
+                  Deres ingredienser står på den dag og bliver ikke købt igen
+                  her.
+                </p>
+              )}
+              {shoppingGroups(state.days.map((d) => d.data)).map((group) => (
+                <section key={group.name} aria-label={group.name}>
+                  <h3>{group.name}</h3>
+                  <div className="shopping-grid">
+                    {group.items.map((i) => (
+                      <label className="shopping-item" key={i.id}>
+                        <input
+                          type="checkbox"
+                          checked={shopping.some(
+                            (s) =>
+                              s.week === date &&
+                              s.ingredient_id === i.id &&
+                              s.checked &&
+                              Number(s.checked_grams || 0) >= i.grams,
+                          )}
+                          onChange={(ev) =>
+                            action("shopping", {
+                              week: date,
+                              id: i.id,
+                              on: ev.target.checked,
+                              count: shoppingDays,
+                            })
+                          }
+                        />
+                        <span>
+                          {i.name}
+                          <small>{i.basis}</small>
+                          {shopping.some(
+                            (s) =>
+                              s.week === date &&
+                              s.ingredient_id === i.id &&
+                              s.checked &&
+                              Number(s.checked_grams || 0) < i.grams,
+                          ) && (
+                            <small>Øget behov — kontrollér mængden igen</small>
+                          )}
+                        </span>
+                        <b>{displayMass(i.grams)}</b>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              ))}
             </section>
           ) : day && quality ? (
             <>
@@ -452,7 +501,7 @@ export default function FoodPlanner({
                           Se opskrift
                         </button>
                       )}
-                      {s.status === "planned" && (
+                      {s.status === "planned" && !s.batch && (
                         <>
                           <button
                             disabled={busy}
@@ -478,12 +527,70 @@ export default function FoodPlanner({
                                 <button onClick={() => meal(s, "remove")}>
                                   Fjern
                                 </button>
+                                {date >= today &&
+                                  date <
+                                    addDays(state.profile.start_date, 99) && (
+                                    <button
+                                      disabled={busy}
+                                      onClick={() => setBatchSlot(s)}
+                                    >
+                                      Lav også til i morgen
+                                    </button>
+                                  )}
                               </>
                             </details>
                           )}
                         </>
                       )}
                     </div>
+                    {s.batch && (
+                      <div className="p-notice">
+                        <b>
+                          {s.batch.cookDate === date &&
+                          s.batch.cookSlot === s.id
+                            ? "Fælles madlavning"
+                            : "Rester fra " + pretty(s.batch.cookDate)}
+                        </b>
+                        <p>
+                          Din energi ovenfor gælder kun din portion. Hele
+                          madlavningens ingredienser står i indkøbet på{" "}
+                          {pretty(s.batch.cookDate)}.
+                        </p>
+                        {s.batch.cookDate === date && (
+                          <details>
+                            <summary>Mængder til hele madlavningen</summary>
+                            <ul>
+                              {s.batch.ingredients.map((i) => (
+                                <li key={i.id}>
+                                  {ingredients.find((v) => v.id === i.id)?.name}
+                                  : {i.grams} g
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                        {s.status === "planned" && (
+                          <button
+                            className="p-secondary"
+                            disabled={busy}
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  "Opløs fælles madlavning? Er alt stadig planlagt, beholdes retterne som separate tilberedninger. Er noget allerede registreret eller historisk, bevares det, mens fremtidige rester bliver til tomme måltidspladser, som du kan erstatte. Kaloriemålet ændres ikke.",
+                                )
+                              )
+                                return;
+                              const r = await request("batch-unlink", {
+                                id: s.batch!.id,
+                              });
+                              if (r) await load();
+                            }}
+                          >
+                            Opløs sammenkædning
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {s.issue && <p className="p-notice">{s.issue}</p>}
                     {date <= today && (
                       <div className="meal-actions">
@@ -523,6 +630,17 @@ export default function FoodPlanner({
             <p>Vælg en dag inden for dit forløb.</p>
           )}
         </>
+      )}
+      {batchSlot && (
+        <BatchMeal
+          date={date}
+          slot={batchSlot}
+          next={state?.days.find((d) => d.date === addDays(date, 1))?.data}
+          close={() => setBatchSlot(null)}
+          saved={async () => {
+            await load();
+          }}
+        />
       )}
       {edit && form && (
         <div

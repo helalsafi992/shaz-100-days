@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { magicLink } from "better-auth/plugins";
+import { magicLink, twoFactor } from "better-auth/plugins";
 import { db, schema, transaction } from "./db";
 import { baseURL, HttpError, hash } from "./security";
 import { sendMail } from "./mail";
@@ -49,6 +49,12 @@ function createAuth() {
     rateLimit: { enabled: false },
     trustedOrigins: [baseURL()],
     plugins: [
+      twoFactor({
+        issuer: "SHAZ",
+        twoFactorTable: "shaz_two_factor",
+        allowPasswordless: true,
+        skipVerificationOnEnable: false,
+      }),
       magicLink({
         expiresIn: 900,
         storeToken: "hashed",
@@ -103,7 +109,7 @@ export async function access(headers: Headers) {
     );
   return { ...s, order: o.rows[0] };
 }
-export async function admin(headers: Headers, owner = false) {
+export async function adminRole(headers: Headers, owner = false) {
   const s = await session(headers);
   const r = await db().query("SELECT role FROM shaz_roles WHERE user_id=$1", [
     s.user.id,
@@ -111,6 +117,22 @@ export async function admin(headers: Headers, owner = false) {
   if (!r.rowCount || (owner && r.rows[0].role !== "owner"))
     throw new HttpError(403, "Denne side kræver administratoradgang.");
   return { ...s, role: r.rows[0].role as "owner" | "editor" };
+}
+export async function admin(headers: Headers, owner = false) {
+  const s = await adminRole(headers, owner);
+  const proof = await db().query(
+    `SELECT 1 FROM shaz_admin_mfa m JOIN shaz_user u ON u.id=m.user_id
+     JOIN shaz_two_factor f ON f."userId"=u.id
+     WHERE m.session_id=$1 AND m.user_id=$2 AND m.expires_at>now()
+       AND u."twoFactorEnabled"=true AND f.verified=true`,
+    [s.session.id, s.user.id],
+  );
+  if (!proof.rowCount)
+    throw new HttpError(
+      428,
+      "Bekræft tofaktorgodkendelse på /admin/security for at åbne administrationen.",
+    );
+  return s;
 }
 export async function requestLogin(
   email: string,

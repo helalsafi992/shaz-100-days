@@ -56,6 +56,14 @@ export async function body(req: Request) {
   }
 }
 export function failure(e: unknown) {
+  if (e instanceof Error && e.message === "MEAL_BATCH_LOCKED")
+    return Response.json(
+      {
+        error:
+          "En fremtidig madlavning har sammenkædede rester. Opløs sammenkædningen på Mad før du ændrer den samlede plan; allerede spist mad ændres ikke.",
+      },
+      { status: 409 },
+    );
   if (e instanceof Error && e.message === "MISSING_EXERCISE_VARIANT")
     return Response.json(
       {

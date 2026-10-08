@@ -64,6 +64,10 @@ export default function Admin() {
   async function refresh() {
     const r = await fetch("/api/platform/admin", { cache: "no-store" });
     const d = await r.json();
+    if (r.status === 428) {
+      location.assign("/admin/security");
+      return;
+    }
     if (!r.ok) throw new Error(d.error);
     setData(d);
     if (d.role === "editor") setTab("content");
@@ -94,6 +98,10 @@ export default function Admin() {
         body: JSON.stringify(input),
       });
       const d = await r.json();
+      if (r.status === 428) {
+        location.assign("/admin/security");
+        return;
+      }
       if (!r.ok) throw new Error(d.error);
       setMessage("Gemt. Handlingen er registreret i auditloggen.");
       await refresh();

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import SecondFactor from "./SecondFactor";
 export default function Checkout({
   open,
   email,
@@ -11,6 +12,7 @@ export default function Checkout({
   verified?: boolean;
   cancelled?: boolean;
 }) {
+  const [factor, setFactor] = useState(false);
   const [account, setAccount] = useState(email || ""),
     [mode, setMode] = useState<"signup" | "login">("signup"),
     [name, setName] = useState(""),
@@ -48,6 +50,12 @@ export default function Checkout({
             (mode === "signup" ? "sign-up/email" : "sign-in/email"),
           { name, email: address, password, callbackURL: "/checkout" },
         );
+        if (d.twoFactorRedirect) {
+          setPassword("");
+          setFactor(true);
+          setBusy(false);
+          return;
+        }
         setAccount(d.user.email);
         setConfirmed(d.user.emailVerified);
         setPassword("");
@@ -101,7 +109,9 @@ export default function Checkout({
               genåbne den samme, uafsluttede betaling.
             </p>
           )}
-          {!open ? (
+          {factor ? (
+            <SecondFactor next="/checkout" />
+          ) : !open ? (
             <>
               <h2>Salget er ikke åbnet.</h2>
               <p>

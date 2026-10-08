@@ -1,6 +1,7 @@
-import { auth } from "@/lib/auth";
+import { auth, adminRole, admin } from "@/lib/auth";
 import { sameOrigin, failure, rate, HttpError } from "@/lib/security";
-import { schema } from "@/lib/db";
+import { schema, db } from "@/lib/db";
+import { recordAdminFactor } from "@/lib/admin-mfa";
 import { isolatedTest } from "@/lib/test-environment";
 export async function POST(req: Request) {
   try {
@@ -15,10 +16,23 @@ export async function POST(req: Request) {
         "reset-password",
         "send-verification-email",
         "change-password",
+        "two-factor/enable",
+        "two-factor/verify-totp",
+        "two-factor/verify-backup-code",
+        "two-factor/generate-backup-codes",
       ].includes(endpoint)
     )
       return new Response("Not found", { status: 404 });
     await schema();
+    if (endpoint === "two-factor/enable") {
+      const s = await adminRole(req.headers);
+      if (s.user.twoFactorEnabled) await admin(req.headers);
+      await db().query("DELETE FROM shaz_admin_mfa WHERE user_id=$1", [
+        s.user.id,
+      ]);
+    }
+    if (endpoint === "two-factor/generate-backup-codes")
+      await admin(req.headers);
     await rate(
       "auth:" +
         endpoint +
@@ -44,6 +58,13 @@ export async function POST(req: Request) {
           : "Kontooprettelse og e-mail er ved at blive gjort klar.",
       );
     const response = await auth().handler(req);
+    if (
+      ["two-factor/verify-totp", "two-factor/verify-backup-code"].includes(
+        endpoint,
+      )
+    )
+      await recordAdminFactor(req, response);
+    response.headers.set("Cache-Control", "no-store");
     if (endpoint === "sign-up/email" && response.ok) {
       const data = await response.clone().json();
       if (data.user?.email)

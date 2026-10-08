@@ -13,6 +13,14 @@ import { nutritionRule, estimate, type NutritionPolicy } from "./nutrition";
 import { suitable, type Recipe } from "./recipes";
 import { HttpError, hash } from "./security";
 import { isolatedTest } from "./test-environment";
+export async function requireNoPendingBatches(user: string) {
+  const rows = await db().query(
+    `SELECT 1 FROM shaz_meal_days WHERE user_id=$1 AND date>=$2
+    AND EXISTS(SELECT 1 FROM jsonb_array_elements(data->'slots') s WHERE s->>'status'='planned' AND s ? 'batch') LIMIT 1`,
+    [user, localDate()],
+  );
+  if (rows.rowCount) throw new Error("MEAL_BATCH_LOCKED");
+}
 export async function requirePlanningRules(): Promise<NutritionPolicy> {
   await catalog("nutrition-rule");
   const review = isolatedTest() || process.env.APP_ENV === "test";
@@ -108,6 +116,7 @@ export async function nutritionChange(
 ) {
   const rule = await requirePlanningRules();
   const old = await planningPeriod(user);
+  await requireNoPendingBatches(user);
   const keys = [
     "goal",
     "nutrition",
@@ -315,6 +324,21 @@ export async function editMeal(
       s = day.slots.find((s) => s.id === v.slot);
     if (!s) throw new HttpError(404, "Måltidet findes ikke.");
     const records = ["eaten", "skipped", "reopen"].includes(v.action);
+    if (s.batch && !records)
+      throw new HttpError(
+        409,
+        "Måltidet indgår i en fælles madlavning. Opløs først sammenkædningen, så indkøb og rester ikke bliver forkerte.",
+      );
+    if (
+      s.batch &&
+      v.action === "skipped" &&
+      s.batch.cookDate === v.date &&
+      s.batch.cookSlot === s.id
+    )
+      throw new HttpError(
+        409,
+        "Hvis madlavningen ikke bliver lavet, skal du først opløse sammenkædningen. Derefter kan du springe måltidet over uden at efterlade planlagte rester.",
+      );
     if (v.date < localDate() && !records)
       throw new HttpError(409, "Historiske måltider ændres ikke.");
     if (records) {

@@ -6,6 +6,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import Stripe from "stripe";
 import { browserPath } from "./browser.mts";
+import { createOTP } from "@better-auth/utils/otp";
+import { base32 } from "@better-auth/utils/base32";
 const results: { name: string; status: string }[] = [];
 const env = {
   ...process.env,
@@ -40,6 +42,7 @@ const { saveProfile, activate, snapshot, ownedDay, changeFuture } =
 const { defaults, localDate, addDays } = await import("../lib/profile");
 const { POST, GET } = await import("../app/api/platform/[...path]/route");
 const { POST: PLANPOST } = await import("../app/api/plan/[...path]/route");
+const { POST: AUTHPOST } = await import("../app/api/auth/[...all]/route");
 const { mealDays } = await import("../lib/planning-store");
 const { mealShopping } = await import("../lib/meal-plan");
 async function planpost(path: string, data: unknown, h: Headers) {
@@ -97,6 +100,7 @@ const users: {
 let browser: import("playwright-core").Browser;
 let server: ChildProcess | undefined;
 let serverOutput = "";
+let ownerOtpSeed = "";
 async function check(name: string, fn: () => Promise<void>) {
   await fn();
   results.push({ name, status: "passed" });
@@ -132,6 +136,32 @@ async function getCookie(email: string) {
     .join("; ");
   assert.ok(cookie);
   return { cookie, token };
+}
+async function authpost(path: string, data: unknown, h: Headers) {
+  return AUTHPOST(
+    new Request(env.APP_URL + "/api/auth/" + path, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify(data),
+    }),
+  );
+}
+function applyAuthCookies(h: Headers, response: Response) {
+  const pairs = new Map(
+    (h.get("cookie") || "")
+      .split("; ")
+      .filter(Boolean)
+      .map((c) => {
+        const i = c.indexOf("=");
+        return [c.slice(0, i), c.slice(i + 1)];
+      }),
+  );
+  for (const c of response.headers.getSetCookie()) {
+    const pair = c.split(";")[0],
+      i = pair.indexOf("=");
+    pairs.set(pair.slice(0, i), pair.slice(i + 1));
+  }
+  h.set("cookie", [...pairs].map(([k, v]) => `${k}=${v}`).join("; "));
 }
 try {
   await check(
@@ -551,6 +581,107 @@ try {
         (await post("invite", { token }, users[2].headers)).status,
         200,
       );
+      await assert.rejects(
+        admin(users[2].headers, true),
+        (e: any) => e.status === 428,
+      );
+      assert.equal(
+        (await authpost("two-factor/enable", {}, users[0].headers)).status,
+        403,
+      );
+      const enrollment = await authpost(
+        "two-factor/enable",
+        {},
+        users[2].headers,
+      );
+      assert.equal(enrollment.status, 200);
+      const setup = await enrollment.json();
+      const seed = new TextDecoder().decode(
+        base32.decode(new URL(setup.totpURI).searchParams.get("secret")!),
+      );
+      const code = await createOTP(seed).totp();
+      ownerOtpSeed = seed;
+      assert.notEqual(
+        (
+          await db().query(
+            'SELECT secret FROM shaz_two_factor WHERE "userId"=$1',
+            [users[2].id],
+          )
+        ).rows[0].secret,
+        seed,
+      );
+      assert.equal(
+        (
+          await authpost(
+            "two-factor/verify-totp",
+            { code: code.slice(0, 5) + ((Number(code[5]) + 1) % 10) },
+            users[2].headers,
+          )
+        ).status,
+        401,
+      );
+      await assert.rejects(
+        admin(users[2].headers),
+        (e: any) => e.status === 428,
+      );
+      const verified = await authpost(
+        "two-factor/verify-totp",
+        { code },
+        users[2].headers,
+      );
+      assert.equal(verified.status, 200);
+      applyAuthCookies(users[2].headers, verified);
+      users[2].cookie = users[2].headers.get("cookie")!;
+      await admin(users[2].headers, true);
+      await db().query(
+        "UPDATE shaz_admin_mfa SET expires_at=now()-interval '1 minute' WHERE user_id=$1",
+        [users[2].id],
+      );
+      await assert.rejects(
+        admin(users[2].headers),
+        (e: any) => e.status === 428,
+      );
+      const renewed = await authpost(
+        "two-factor/verify-totp",
+        { code: await createOTP(seed).totp() },
+        users[2].headers,
+      );
+      assert.equal(renewed.status, 200);
+      applyAuthCookies(users[2].headers, renewed);
+      users[2].cookie = users[2].headers.get("cookie")!;
+      await requestLogin(users[2].email, new Headers({ origin: env.APP_URL }));
+      const another = await getCookie(users[2].email);
+      const otherHeaders = new Headers({
+        cookie: another.cookie,
+        origin: env.APP_URL,
+        "Content-Type": "application/json",
+      });
+      await assert.rejects(admin(otherHeaders), (e: any) => e.status === 428);
+      assert.equal(
+        (
+          await authpost(
+            "two-factor/verify-backup-code",
+            { code: setup.backupCodes[0] },
+            otherHeaders,
+          )
+        ).status,
+        200,
+      );
+      await admin(otherHeaders);
+      assert.equal(
+        (
+          await authpost(
+            "two-factor/verify-backup-code",
+            { code: setup.backupCodes[0] },
+            otherHeaders,
+          )
+        ).status,
+        401,
+      );
+      results.push({
+        name: "Admin MFA: enrollment, wrong factor, encrypted seed, session-specific expiry, legacy magic-link step-up and single-use recovery",
+        status: "passed",
+      });
       await admin(users[2].headers, true);
       const content = (
         await db().query(
@@ -1393,14 +1524,73 @@ try {
       assert.equal(first.id, second.id);
     },
   );
-  await check("T10/N02: empty/future completion and expired aggressive meals are denied by API",async()=>{
-    const u=users[2],state=await snapshot(u.id),todaySession=state.days.find(d=>d.scheduled_date===today&&d.plan.kind==="workout"),future=state.days.find(d=>d.scheduled_date>today&&d.plan.kind==="workout");
-    assert.equal((await post("workout",{id:todaySession.id,complete:true,sets:[]},u.headers)).status,400);
-    assert.equal((await post("workout",{id:future.id,complete:true,sets:[]},u.headers)).status,400);
-    const row=(await mealDays(u.id,today,1))[0];const old=state.profile.data;
-    await db().query("UPDATE shaz_profile SET data=$2 WHERE user_id=$1",[u.id,JSON.stringify({...old,goal:"fat-loss",deficitLevel:"aggressive",deficitReviewUntil:addDays(today,-1)})]);
-    try{assert.equal((await planpost("meal",{date:today,slot:row.data.slots.find((s:any)=>s.status==="planned").id,action:"remove",expectedVersion:row.version},u.headers)).status,409);}finally{await db().query("UPDATE shaz_profile SET data=$2 WHERE user_id=$1",[u.id,JSON.stringify(old)]);}
-  });
+  await check(
+    "T10/N02: empty/future completion and expired aggressive meals are denied by API",
+    async () => {
+      const u = users[2],
+        state = await snapshot(u.id),
+        todaySession = state.days.find(
+          (d) => d.scheduled_date === today && d.plan.kind === "workout",
+        ),
+        future = state.days.find(
+          (d) => d.scheduled_date > today && d.plan.kind === "workout",
+        );
+      assert.equal(
+        (
+          await post(
+            "workout",
+            { id: todaySession.id, complete: true, sets: [] },
+            u.headers,
+          )
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await post(
+            "workout",
+            { id: future.id, complete: true, sets: [] },
+            u.headers,
+          )
+        ).status,
+        400,
+      );
+      const row = (await mealDays(u.id, today, 1))[0];
+      const old = state.profile.data;
+      await db().query("UPDATE shaz_profile SET data=$2 WHERE user_id=$1", [
+        u.id,
+        JSON.stringify({
+          ...old,
+          goal: "fat-loss",
+          deficitLevel: "aggressive",
+          deficitReviewUntil: addDays(today, -1),
+        }),
+      ]);
+      try {
+        assert.equal(
+          (
+            await planpost(
+              "meal",
+              {
+                date: today,
+                slot: row.data.slots.find((s: any) => s.status === "planned")
+                  .id,
+                action: "remove",
+                expectedVersion: row.version,
+              },
+              u.headers,
+            )
+          ).status,
+          409,
+        );
+      } finally {
+        await db().query("UPDATE shaz_profile SET data=$2 WHERE user_id=$1", [
+          u.id,
+          JSON.stringify(old),
+        ]);
+      }
+    },
+  );
   // Browser is started in this process tree so it shares the isolated test network.
   const { chromium: pw } = await import("playwright-core");
 
@@ -1575,6 +1765,19 @@ try {
         .getByLabel("Adgangskode", { exact: true })
         .fill(browserPassword);
       await page.getByRole("button", { name: "Log ind", exact: true }).click();
+      await page.getByLabel("Kode fra din godkendelsesapp").waitFor();
+      assert.equal(
+        (
+          await context.request.get(env.APP_URL + "/api/platform/state")
+        ).status(),
+        401,
+      );
+      await page
+        .getByLabel("Kode fra din godkendelsesapp")
+        .fill(await createOTP(ownerOtpSeed).totp());
+      await page
+        .getByRole("button", { name: "Bekræft kode", exact: true })
+        .click();
       await page.waitForURL("**/app");
       await page.screenshot({
         path: "test-artifacts/mobile-login-dashboard.png",
@@ -1606,12 +1809,20 @@ try {
       assert.ok(
         await dialog.evaluate((d) => d.contains(document.activeElement)),
       );
-      const beforeCancel=await (await context.request.get(env.APP_URL+"/api/plan/state")).json();
-      await dialog.getByRole("button",{name:"Vælg B",exact:true}).click();
+      const beforeCancel = await (
+        await context.request.get(env.APP_URL + "/api/plan/state")
+      ).json();
+      await dialog.getByRole("button", { name: "Vælg B", exact: true }).click();
       await page.keyboard.press("Escape");
       await dialog.waitFor({ state: "hidden" });
-      const afterCancel=await (await context.request.get(env.APP_URL+"/api/plan/state")).json();
-      assert.deepEqual(afterCancel.days,beforeCancel.days,"Closing pending choice must not persist it");
+      const afterCancel = await (
+        await context.request.get(env.APP_URL + "/api/plan/state")
+      ).json();
+      assert.deepEqual(
+        afterCancel.days,
+        beforeCancel.days,
+        "Closing pending choice must not persist it",
+      );
       await page.getByText("Flere handlinger", { exact: true }).first().click();
       await page
         .getByRole("button", { name: "Tilpas portion", exact: true })
@@ -1656,6 +1867,12 @@ try {
       await p2.getByLabel("E-mail", { exact: true }).fill(users[2].email);
       await p2.getByLabel("Adgangskode", { exact: true }).fill(browserPassword);
       await p2.getByRole("button", { name: "Log ind", exact: true }).click();
+      await p2
+        .getByLabel("Kode fra din godkendelsesapp")
+        .fill(await createOTP(ownerOtpSeed).totp());
+      await p2
+        .getByRole("button", { name: "Bekræft kode", exact: true })
+        .click();
       await p2.waitForURL("**/app");
       const after = await (
         await second.request.get(env.APP_URL + "/api/plan/state")
@@ -2010,6 +2227,110 @@ try {
         null,
       );
       await assert.rejects(session(u.headers));
+    },
+  );
+  await check(
+    "M08/M10: batch preview, atomic linked portions, cooking-date shopping, history locks and cross-user denial",
+    async () => {
+      const u = users[2],
+        date = addDays(today, 21);
+      const original = await mealDays(u.id, date, 2);
+      const input = {
+        date,
+        slot: original[0].data.slots[0].id,
+        targetSlot: original[1].data.slots[0].id,
+      };
+      const preview = await planpost("batch-preview", input, u.headers);
+      assert.equal(preview.status, 200, JSON.stringify(preview.data));
+      assert.deepEqual(
+        (await mealDays(u.id, date, 2, false)).map((d) => d.data),
+        original.map((d) => d.data),
+      );
+      const body = { ...input, fingerprint: preview.data.fingerprint };
+      const saved = await planpost("batch-confirm", body, u.headers);
+      assert.equal(saved.status, 200, JSON.stringify(saved.data));
+      const linked = await mealDays(u.id, date, 2, false),
+        batch = linked[0].data.slots[0].batch;
+      assert.equal(linked[1].data.slots[0].batch.id, batch.id);
+      assert.equal(
+        (await planpost("batch-confirm", body, u.headers)).status,
+        409,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date,
+              slot: input.slot,
+              action: "remove",
+              expectedVersion: linked[0].version,
+            },
+            u.headers,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (await planpost("batch-unlink", { id: batch.id }, users[0].headers))
+          .status,
+        404,
+      );
+      const plain = structuredClone(linked.map((d) => d.data));
+      for (const d of plain) for (const s of d.slots) delete s.batch;
+      assert.deepEqual(
+        mealShopping(linked.map((d) => d.data)),
+        mealShopping(plain),
+      );
+      assert.deepEqual(
+        linked[0].data.slots[0].selected,
+        original[0].data.slots[0].selected,
+      );
+      const locked = await planpost(
+        "nutrition-preview",
+        { settings: { mealCount: 4 } },
+        u.headers,
+      );
+      assert.equal(locked.status, 409);
+      assert.equal(
+        (await planpost("batch-unlink", { id: batch.id }, u.headers)).status,
+        200,
+      );
+      assert.deepEqual(
+        (await mealDays(u.id, date, 2, false)).map((d) => d.data),
+        plain,
+      );
+      const again = await planpost("batch-preview", input, u.headers);
+      assert.equal(
+        (
+          await planpost(
+            "batch-confirm",
+            { ...input, fingerprint: again.data.fingerprint },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      const historical = await mealDays(u.id, date, 2, false);
+      historical[0].data.slots[0].status = "eaten";
+      await db().query(
+        "UPDATE shaz_meal_days SET data=$3,version=version+1 WHERE user_id=$1 AND date=$2",
+        [u.id, date, JSON.stringify(historical[0].data)],
+      );
+      assert.equal(
+        (
+          await planpost(
+            "batch-unlink",
+            { id: historical[0].data.slots[0].batch.id },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      const released = await mealDays(u.id, date, 2, false);
+      assert.deepEqual(released[0].data, historical[0].data);
+      assert.equal(released[1].data.slots[0].selected, null);
+      assert.equal(released[1].data.target, historical[1].data.target);
     },
   );
   await browser.close();

@@ -18,7 +18,9 @@ export default async function Page() {
   }
   try {
     await admin(await headers());
-  } catch {
+  } catch (error) {
+    if ((error as { status?: number }).status === 428)
+      redirect("/admin/security");
     const invitation = await db().query(
       "SELECT 1 FROM shaz_invites WHERE lower(email)=lower($1) AND used_at IS NULL AND expires>now()",
       [s.user.email],

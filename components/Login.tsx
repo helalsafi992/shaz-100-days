@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import SecondFactor from "./SecondFactor";
 type Mode = "login" | "signup" | "forgot" | "magic" | "verify" | "reset";
 export default function Login({ test = false }: { test?: boolean }) {
+  const [factor, setFactor] = useState(false);
   const [mode, setMode] = useState<Mode>("login"),
     [email, setEmail] = useState(""),
     [name, setName] = useState(""),
@@ -30,6 +32,7 @@ export default function Login({ test = false }: { test?: boolean }) {
     if (action === "forgot") setMode("forgot");
   }, []);
   function switchMode(m: Mode) {
+    setFactor(false);
     setMode(m);
     setMessage("");
     setToken("");
@@ -78,6 +81,11 @@ export default function Login({ test = false }: { test?: boolean }) {
             (typeof d.error === "string" ? d.error : d.message) ||
             "Kontrollér din e-mail og adgangskode.",
         );
+        return;
+      }
+      if (d.twoFactorRedirect) {
+        setPassword("");
+        setFactor(true);
         return;
       }
       if (
@@ -140,76 +148,87 @@ export default function Login({ test = false }: { test?: boolean }) {
               ? "Opret din konto. Bekræft e-mailen. Køb adgang for 399 kr. én gang."
               : "Dine planer og registreringer venter på dig."}
         </p>
-        <form onSubmit={submit}>
-          {mode === "signup" && (
-            <label>
-              Navn
-              <input
-                value={name}
-                autoComplete="name"
-                required
-                maxLength={100}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-          )}
-          {!["verify", "reset"].includes(mode) && !token && (
-            <label>
-              E-mail
-              <input
-                type="email"
-                autoComplete="email"
-                autoCapitalize="none"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-          )}
-          {["login", "signup", "reset"].includes(mode) && (
-            <label>
-              Adgangskode
-              <input
-                type={showPassword ? "text" : "password"}
-                autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
-                }
-                minLength={mode === "login" ? 1 : 12}
-                maxLength={128}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              {mode !== "login" && (
-                <small>
-                  Mindst 12 tegn. En lang, unik sætning er et godt valg.
-                </small>
-              )}
-            </label>
-          )}
-          {["login", "signup", "reset"].includes(mode) && (
-            <button
-              type="button"
-              className="p-secondary"
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? "Skjul adgangskode" : "Vis adgangskode"}
+        {factor ? (
+          <SecondFactor
+            next={
+              typeof location !== "undefined" &&
+              new URLSearchParams(location.search).get("next") === "checkout"
+                ? "/checkout"
+                : "/app"
+            }
+          />
+        ) : (
+          <form onSubmit={submit}>
+            {mode === "signup" && (
+              <label>
+                Navn
+                <input
+                  value={name}
+                  autoComplete="name"
+                  required
+                  maxLength={100}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+            )}
+            {!["verify", "reset"].includes(mode) && !token && (
+              <label>
+                E-mail
+                <input
+                  type="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+            )}
+            {["login", "signup", "reset"].includes(mode) && (
+              <label>
+                Adgangskode
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
+                  minLength={mode === "login" ? 1 : 12}
+                  maxLength={128}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                {mode !== "login" && (
+                  <small>
+                    Mindst 12 tegn. En lang, unik sætning er et godt valg.
+                  </small>
+                )}
+              </label>
+            )}
+            {["login", "signup", "reset"].includes(mode) && (
+              <button
+                type="button"
+                className="p-secondary"
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? "Skjul adgangskode" : "Vis adgangskode"}
+              </button>
+            )}
+            <button className="p-button" disabled={busy}>
+              {busy
+                ? "Et øjeblik…"
+                : {
+                    login: "Log ind",
+                    signup: "Opret konto",
+                    forgot: "Send nulstillingslink",
+                    magic: token ? "Bekræft og log ind" : "Send loginlink",
+                    verify: "Bekræft e-mail",
+                    reset: "Gem ny adgangskode",
+                  }[mode]}
             </button>
-          )}
-          <button className="p-button" disabled={busy}>
-            {busy
-              ? "Et øjeblik…"
-              : {
-                  login: "Log ind",
-                  signup: "Opret konto",
-                  forgot: "Send nulstillingslink",
-                  magic: token ? "Bekræft og log ind" : "Send loginlink",
-                  verify: "Bekræft e-mail",
-                  reset: "Gem ny adgangskode",
-                }[mode]}
-          </button>
-        </form>
+          </form>
+        )}
         {message && (
           <p className="p-notice" role="status">
             {message}

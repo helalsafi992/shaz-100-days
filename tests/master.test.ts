@@ -14,6 +14,9 @@ import { generateCardio } from "../lib/cardio";
 import { makeMealDay, mealShopping, mealQuality } from "../lib/meal-plan";
 import { recipes, suitable } from "../lib/recipes";
 import { activityForDate, activityCounts } from "../lib/activity";
+import { shoppingGroups, displayMass } from "../lib/shopping";
+import { batchPlan } from "../lib/meal-batch";
+import { nutritionRule } from "../lib/nutrition";
 
 export const hybrid: Profile = {
   ...defaults,
@@ -182,4 +185,79 @@ test("S03 program dates cover day 0,1,100,101, leap day and DST", () => {
       101,
     );
   }
+});
+test("M10 grouped shopping preserves every selected ingredient once, quantity and weight basis", () => {
+  const p = { ...defaults, startDate: hybrid.startDate, householdSize: 2 };
+  const days = Array.from({ length: 14 }, (_, i) =>
+    makeMealDay(p, addDays(p.startDate, i), recipes),
+  );
+  const grouped = shoppingGroups(days)
+    .flatMap((g) => g.items)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const flat = mealShopping(days).sort((a, b) => a.id.localeCompare(b.id));
+  assert.deepEqual(grouped, flat);
+  assert.equal(new Set(grouped.map((i) => i.id)).size, grouped.length);
+  assert.equal(displayMass(1250), "1,25 kg");
+  assert.equal(displayMass(999), "999 g");
+});
+test("M08 batch allocation buys once on cooking day and never doubles personal nutrition", () => {
+  const p = { ...defaults, householdSize: 2, startDate: hybrid.startDate };
+  const first = makeMealDay(p, p.startDate, recipes),
+    second = makeMealDay(p, addDays(p.startDate, 1), recipes);
+  const b = batchPlan(
+    p,
+    first,
+    second,
+    first.slots[0].id,
+    second.slots[0].id,
+    recipes,
+    nutritionRule,
+    "fixture",
+  );
+  assert.deepEqual(mealQuality(b.first).total, mealQuality(first).total);
+  const unlinked = [structuredClone(b.first), structuredClone(b.second)];
+  for (const d of unlinked) for (const s of d.slots) delete s.batch;
+  assert.deepEqual(mealShopping([b.first, b.second]), mealShopping(unlinked));
+  const leftover = structuredClone(b.second);
+  leftover.slots[0].selected = null;
+  delete leftover.slots[0].batch;
+  assert.deepEqual(mealShopping([b.second]), mealShopping([leftover]));
+  for (const i of b.batch.ingredients)
+    assert.equal(
+      i.grams,
+      ((b.first.slots[0].selected!.recipe.ingredients.find((v) => v.id === i.id)
+        ?.grams || 0) +
+        (b.second.slots[0].selected!.recipe.ingredients.find(
+          (v) => v.id === i.id,
+        )?.grams || 0)) *
+        2,
+    );
+  assert.throws(
+    () => makeMealDay(p, b.first.date, recipes, b.first),
+    /MEAL_BATCH_LOCKED/,
+  );
+  assert.throws(() =>
+    batchPlan(
+      {
+        ...p,
+        avoid: [
+          "milk",
+          "gluten",
+          "egg",
+          "chickpeas",
+          "beans",
+          "tofu",
+          "rice",
+          "lentils",
+        ],
+      },
+      first,
+      second,
+      first.slots[0].id,
+      second.slots[0].id,
+      recipes,
+      nutritionRule,
+      "fixture",
+    ),
+  );
 });

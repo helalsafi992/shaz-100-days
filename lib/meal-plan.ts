@@ -18,6 +18,18 @@ export type MealSlot = {
   previous?: MealOption | null;
   status: "planned" | "eaten" | "skipped";
   issue: string;
+  batch?: {
+    id: string;
+    cookDate: string;
+    cookSlot: string;
+    portions: {
+      date: string;
+      slot: string;
+      personalServings: number;
+      people: number;
+    }[];
+    ingredients: { id: string; grams: number }[];
+  };
 };
 export type MealDay = {
   date: string;
@@ -104,6 +116,10 @@ export function makeMealDay(
     count = p.mealCount || 4;
   const target = e.available && e.allowed ? e.target : null;
   const locked = (previous?.slots || []).filter((s) => s.status !== "planned");
+  // A linked cooking batch is a cross-day allocation. Never silently break it
+  // while changing targets or training settings; explicitly dissolve it first.
+  if (previous?.slots.some((s) => s.batch && s.status === "planned"))
+    throw new Error("MEAL_BATCH_LOCKED");
   const totalLocked = totalOptions(
     locked.filter((s) => s.status === "eaten").map((s) => s.selected),
   );
@@ -252,14 +268,30 @@ export function mealQuality(day: MealDay) {
 }
 export function mealShopping(days: MealDay[]) {
   const map = new Map<string, number>();
+  const batches = new Set<string>();
   for (const day of days)
-    for (const s of day.slots)
+    for (const s of day.slots) {
+      if (s.batch) {
+        // All cooking ingredients are bought ONCE on the cooking date, not
+        // once for that batch AND again for each personal leftover portion.
+        if (
+          s.batch.cookDate === day.date &&
+          s.batch.cookSlot === s.id &&
+          !batches.has(s.batch.id)
+        ) {
+          batches.add(s.batch.id);
+          for (const i of s.batch.ingredients)
+            map.set(i.id, (map.get(i.id) || 0) + i.grams);
+        }
+        continue;
+      }
       if (s.selected && s.status !== "skipped")
         for (const i of s.selected.recipe.ingredients)
           map.set(
             i.id,
             (map.get(i.id) || 0) + i.grams * (day.householdSize || 1),
           );
+    }
   return [...map]
     .map(([id, grams]) => ({
       ...ingredients.find((i) => i.id === id)!,

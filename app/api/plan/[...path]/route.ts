@@ -7,6 +7,7 @@ import { localDate } from "@/lib/profile";
 import { cardioRows, cardioSettings, editCardio } from "@/lib/cardio-store";
 import { estimate } from "@/lib/nutrition";
 import { trainingChange } from "@/lib/training-change";
+import { mealBatch, unlinkBatch } from "@/lib/batch-store";
 const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -18,7 +19,12 @@ const date = z
 export async function GET(req: Request) {
   try {
     const s = await access(req.headers);
-    const count=z.coerce.number().int().min(1).max(14).parse(new URL(req.url).searchParams.get("count")||7);
+    const count = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(14)
+      .parse(new URL(req.url).searchParams.get("count") || 7);
     const start = date.parse(
       new URL(req.url).searchParams.get("start") || localDate(),
     );
@@ -46,6 +52,28 @@ export async function POST(
     await rate("plan:" + s.user.id, 180, 5);
     const input = await body(req),
       path = (await params).path.join("/");
+    if (path === "batch-preview" || path === "batch-confirm")
+      return Response.json(
+        await mealBatch(
+          s.user.id,
+          z
+            .object({
+              date,
+              slot: z.string().max(80),
+              targetSlot: z.string().max(80),
+              fingerprint: z.string().max(64).optional(),
+            })
+            .parse(input),
+          path === "batch-confirm",
+        ),
+      );
+    if (path === "batch-unlink")
+      return Response.json(
+        await unlinkBatch(
+          s.user.id,
+          z.object({ id: z.string().uuid() }).parse(input).id,
+        ),
+      );
     if (path === "prepare-meals") {
       const v = z
         .object({

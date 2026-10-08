@@ -14,7 +14,10 @@ import { generatePlan, type Exercise, type DayPlan } from "./training";
 import { generateCardio, cardioRule } from "./cardio";
 import { HttpError } from "./security";
 import { makeMealDay } from "./meal-plan";
-import { requirePlanningRules } from "./planning-store";
+import {
+  requirePlanningRules,
+  requireNoPendingBatches,
+} from "./planning-store";
 import type { Recipe } from "./recipes";
 
 type Change = {
@@ -32,6 +35,7 @@ export async function trainingChange(
   confirm = false,
 ) {
   const old = await profile(user);
+  if (!input.id) await requireNoPendingBatches(user);
   if (!old.start_date) throw new HttpError(409, "Aktivér først dit forløb.");
   if (localDate() > addDays(old.start_date, 99))
     throw new HttpError(403, "Forløbet er afsluttet. Din historik bevares.");

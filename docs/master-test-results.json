@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T22:39:18.437Z",
+  "at": "2026-10-08T23:07:52.355Z",
   "database": "Isolated PGlite PostgreSQL via wire protocol",
   "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
   "email": "Encrypted local mail capture; no actual mailbox delivery",
@@ -34,6 +34,10 @@
     },
     {
       "name": "Refund request belongs to buyer, signed refund/dispute events revoke access and preserve receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Admin MFA: enrollment, wrong factor, encrypted seed, session-specific expiry, legacy magic-link step-up and single-use recovery",
       "status": "passed"
     },
     {
@@ -114,6 +118,10 @@
     },
     {
       "name": "Data export and deletion remove customer data while retaining separate order evidence",
+      "status": "passed"
+    },
+    {
+      "name": "M08/M10: batch preview, atomic linked portions, cooking-date shopping, history locks and cross-user denial",
       "status": "passed"
     }
   ]
