@@ -52,7 +52,7 @@ function receiptSnapshot() {
     support: process.env.SUPPORT_EMAIL,
   };
 }
-export async function createCheckout() {
+export async function createCheckout(email: string) {
   if (!salesOpen())
     throw new HttpError(
       503,
@@ -89,6 +89,7 @@ export async function createCheckout() {
   const s = await stripe().checkout.sessions.create(
     {
       mode: "payment",
+      customer_email: email,
       line_items: [{ price: price.id, quantity: 1 }],
       success_url: baseURL() + "/checkout/success",
       cancel_url: baseURL() + "/checkout?cancelled=1",

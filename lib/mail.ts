@@ -16,6 +16,10 @@ export async function sendMail(
   return key;
 }
 function message(kind: string, p: Payload) {
+  if (kind === "verify-email" || kind === "password-reset") return {
+    subject: kind === "verify-email" ? "Bekræft din SHAZ-konto" : "Vælg en ny adgangskode til SHAZ",
+    text: `Åbn linket og bekræft i browseren:\n${p.url}\n\nLinket udløber efter én time. Del det ikke. Hvis du ikke har bedt om dette, kan du ignorere mailen.`,
+  };
   if (kind === "login")
     return {
       subject: "Dit sikre login til SHAZ",

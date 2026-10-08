@@ -11,8 +11,10 @@ type Order = {
 export default function Account({
   email,
   orders,
+  test = false,
 }: {
   email: string;
+  test?: boolean;
   orders: Order[];
 }) {
   const [message, setMessage] = useState(""),
@@ -54,6 +56,7 @@ export default function Account({
           {message}
         </p>
       )}
+      {test && <section className="p-card"><span className="p-eyebrow">DIN TESTPROFIL</span><h2>Prøv hele forløbet.</h2><p>Nulstilling sletter kun dine fiktive planer og registreringer her. Din konto og adgangskode bevares.</p><div className="p-actions">{[false,true].map(populated => <button className="p-secondary" key={String(populated)} disabled={busy} onClick={async()=>{if(!window.confirm("Nulstil din testprofil og dens registreringer?"))return;setBusy(true);try{const r=await fetch("/api/test/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({populated})});if(!r.ok)throw new Error();location.href=populated?"/app":"/onboarding";}catch{setMessage("Nulstillingen kunne ikke gennemføres.");setBusy(false);}}}>{populated?"Gendan udfyldt testprofil":"Nulstil og prøv onboarding"}</button>)}</div><a href="/admin">Åbn testadministration</a></section>}
       <div className="p-grid">
         <section className="p-card">
           <h2>Tilpas dit forløb.</h2>

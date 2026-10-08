@@ -1,3 +1,4 @@
+import { session } from "@/lib/auth";
 import { createCheckout } from "@/lib/payments";
 import { sameOrigin, body, failure, rate } from "@/lib/security";
 import { z } from "zod";
@@ -11,7 +12,8 @@ export async function POST(req: Request) {
     z.object({ adult: z.literal(true), terms: z.literal(true) }).parse(
       await body(req),
     );
-    const result = await createCheckout();
+    const account = await session(req.headers);
+    const result = await createCheckout(account.user.email);
     return Response.json(
       { url: result.url },
       {

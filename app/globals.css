@@ -2969,3 +2969,5 @@ body:has(.portal) {
   margin-left: auto;
   margin-right: auto;
 }
+
+.test-environment-banner{background:#d9ff7a;color:#163d2d;font:700 11px/1.4 system-ui;text-align:center;padding:7px 12px;letter-spacing:.05em}.auth-links{display:flex;flex-wrap:wrap;gap:16px;margin-top:24px}.auth-links button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;font-size:14px}.p-actions{display:flex;flex-wrap:wrap;gap:12px}

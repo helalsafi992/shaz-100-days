@@ -1,3 +1,4 @@
+import { isolatedTest } from "@/lib/test-environment";
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="da">
-      <body>{children}</body>
+      <body>{isolatedTest() && <div className="test-environment-banner">SHAZ TEST · Fiktive data · Ingen betalinger</div>}{children}</body>
     </html>
   );
 }

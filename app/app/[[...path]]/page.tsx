@@ -6,6 +6,7 @@ import Portal, { type PlatformState } from "@/components/Portal";
 import Account from "@/components/Account";
 import Gate from "@/components/Gate";
 import { HttpError } from "@/lib/security";
+import { testGrant } from "@/lib/test-environment";
 import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -28,6 +29,7 @@ export default async function Page({
       return (
         <Account
           email={s.user.email}
+          test={Boolean(await testGrant(s.user.id))}
           orders={JSON.parse(JSON.stringify(orders.rows))}
         />
       );

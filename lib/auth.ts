@@ -3,6 +3,7 @@ import { magicLink } from "better-auth/plugins";
 import { db, schema, transaction } from "./db";
 import { baseURL, HttpError, hash } from "./security";
 import { sendMail } from "./mail";
+import { isolatedTest, testGrant } from "./test-environment";
 function createAuth() {
   if (!process.env.BETTER_AUTH_SECRET)
     throw new HttpError(503, "Login er ikke åbnet endnu.");
@@ -19,6 +20,25 @@ function createAuth() {
     },
     account: { modelName: "shaz_account" },
     verification: { modelName: "shaz_verification" },
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 12,
+      maxPasswordLength: 128,
+      requireEmailVerification: true,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, token }) => {
+        await sendMail(user.email, "password-reset", { url: baseURL() + "/login#reset=" + encodeURIComponent(token) });
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: !isolatedTest(),
+      sendOnSignIn: !isolatedTest(),
+      autoSignInAfterVerification: true,
+      expiresIn: 3600,
+      sendVerificationEmail: async ({ user, token }) => {
+        await sendMail(user.email, "verify-email", { url: baseURL() + "/login#verify=" + encodeURIComponent(token) });
+      },
+    },
     advanced: { database: { generateId: () => crypto.randomUUID() } },
     rateLimit: { enabled: false },
     trustedOrigins: [baseURL()],
@@ -48,12 +68,14 @@ export async function session(headers: Headers) {
   await schema();
   const s = await auth().api.getSession({ headers });
   if (!s?.user.emailVerified)
-    throw new HttpError(401, "Log ind med dit bekræftede e-maillink.");
+    throw new HttpError(401, "Log ind og bekræft din e-mail.");
   return s;
 }
 export const liveMode = () => process.env.STRIPE_MODE === "live";
 export async function access(headers: Headers) {
   const s = await session(headers);
+  if (await testGrant(s.user.id))
+    return { ...s, order: { id: "isolated-test-access", status: "test" } };
   const q = await db().query(
     `UPDATE shaz_orders SET user_id=$1 WHERE lower(email)=lower($2) AND user_id IS NULL`,
     [s.user.id, s.user.email],
@@ -86,7 +108,7 @@ export async function requestLogin(
 ) {
   await schema();
   const allowed = await db().query(
-    `SELECT 1 FROM shaz_orders WHERE lower(email)=lower($1) AND status IN ('paid','refunded','disputed') UNION ALL SELECT 1 FROM shaz_invites WHERE lower(email)=lower($1) AND expires>now() AND used_at IS NULL UNION ALL SELECT 1 FROM shaz_user u JOIN shaz_roles r ON r.user_id=u.id WHERE lower(u.email)=lower($1) LIMIT 1`,
+    `SELECT 1 FROM shaz_orders WHERE lower(email)=lower($1) AND status IN ('paid','refunded','disputed') UNION ALL SELECT 1 FROM shaz_invites WHERE lower(email)=lower($1) AND expires>now() AND used_at IS NULL UNION ALL SELECT 1 FROM shaz_user WHERE lower(email)=lower($1) LIMIT 1`,
     [email],
   );
   if (allowed.rowCount)
