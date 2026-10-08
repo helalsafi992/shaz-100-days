@@ -91,7 +91,12 @@ export default function CardioPlanner({
     }
   }
   const list = rows
-    .filter((r) => r.status !== "removed" && r.scheduled_date >= today)
+    .filter(
+      (r) =>
+        r.status !== "removed" &&
+        r.status !== "paused" &&
+        r.scheduled_date >= today,
+    )
     .slice(0, 6);
   return (
     <section className="p-card cardio-planner" id="cardio">

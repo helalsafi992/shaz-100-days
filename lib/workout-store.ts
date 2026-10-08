@@ -1,3 +1,4 @@
+import { assertNoBreak } from "./break-store";
 import { db, transaction } from "./db";
 import { activePeriod, ownedDay } from "./platform";
 import { localDate } from "./profile";
@@ -15,12 +16,18 @@ export async function saveDraft(
 ) {
   await activePeriod(user);
   return await transaction(async (c) => {
+    await c.query(
+      "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+      [user],
+    );
     const q = await c.query(
       "SELECT *,scheduled_date::text FROM shaz_days WHERE id=$1 AND user_id=$2 FOR UPDATE",
       [v.id, user],
     );
     if (!q.rowCount) throw new HttpError(404, "Træningen findes ikke.");
     const day = q.rows[0];
+    if (day.status !== "completed")
+      await assertNoBreak(c, user, day.scheduled_date);
     if (day.scheduled_date > localDate() || day.plan.kind !== "workout")
       throw new HttpError(
         400,

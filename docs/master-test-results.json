@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T23:07:52.355Z",
+  "at": "2026-10-08T23:33:33.271Z",
   "database": "Isolated PGlite PostgreSQL via wire protocol",
   "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
   "email": "Encrypted local mail capture; no actual mailbox delivery",
@@ -85,7 +85,15 @@
       "status": "passed"
     },
     {
+      "name": "T06/S01: pause preview, stale draft conflict, persistent restart, protected logs and exact 100 days",
+      "status": "passed"
+    },
+    {
       "name": "Mobile and desktop browser routes, real authenticated UI, no horizontal overflow or client exceptions",
+      "status": "passed"
+    },
+    {
+      "name": "T06/M08/M10 mobile UI: password login, cancelled preview, persistent pause and batch, saved grouped shopping",
       "status": "passed"
     },
     {

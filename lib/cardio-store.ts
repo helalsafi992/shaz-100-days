@@ -1,3 +1,5 @@
+import { scheduleBreaks, assertNoBreak } from "./break-store";
+import { scheduledCardio } from "./schedule-breaks";
 import { db, transaction } from "./db";
 import { profile, activePeriod } from "./platform";
 import { localDate, addDays, profileSchema, type Profile } from "./profile";
@@ -50,12 +52,14 @@ export async function syncCardio(
   });
 }
 export async function cardioRows(user: string) {
-  return (
-    await db().query(
+  const [rows, breaks] = await Promise.all([
+    db().query(
       "SELECT id,day,scheduled_date::text,plan,status,log FROM shaz_cardio WHERE user_id=$1 ORDER BY scheduled_date",
       [user],
-    )
-  ).rows;
+    ),
+    scheduleBreaks(user),
+  ]);
+  return rows.rows.map((r) => scheduledCardio(r, breaks));
 }
 export async function cardioSettings(
   user: string,
@@ -115,6 +119,10 @@ export async function editCardio(
   const p = await activePeriod(user);
   await requirePlanningRules();
   await transaction(async (c) => {
+    await c.query(
+      "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+      [user],
+    );
     const q = await c.query(
       "SELECT *,scheduled_date::text FROM shaz_cardio WHERE id=$1 AND user_id=$2 FOR UPDATE",
       [v.id, user],
@@ -122,11 +130,13 @@ export async function editCardio(
     if (!q.rowCount) throw new HttpError(404, "Passet findes ikke.");
     const row = q.rows[0],
       plan = row.plan as CardioPlan;
+    if (row.status !== "completed")
+      await assertNoBreak(c, user, row.scheduled_date);
     if (v.action === "log") {
       if (row.scheduled_date > localDate() || row.status === "removed")
         throw new HttpError(400, "Passet kan ikke registreres på denne dato.");
       await c.query(
-        "UPDATE shaz_cardio SET log=$3,status='completed',updated_at=now() WHERE id=$1 AND user_id=$2",
+        "UPDATE shaz_cardio SET log=$3,plan=$4,status='completed',updated_at=now() WHERE id=$1 AND user_id=$2",
         [
           v.id,
           user,
@@ -135,6 +145,9 @@ export async function editCardio(
             distance: v.distance,
             effort: v.effort,
           }),
+          JSON.stringify(
+            scheduledCardio(row, await scheduleBreaks(user, c)).plan,
+          ),
         ],
       );
       return;
@@ -155,6 +168,7 @@ export async function editCardio(
     } else if (v.action === "move") {
       if (!v.date || v.date < localDate() || v.date > addDays(p.start_date, 98))
         throw new HttpError(400, "Vælg en dato før afslutningsdagen.");
+      await assertNoBreak(c, user, v.date);
       const strength = await c.query(
         "SELECT 1 FROM shaz_days WHERE user_id=$1 AND scheduled_date=$2 AND plan->>'kind'='workout' AND status<>'skipped'",
         [user, v.date],

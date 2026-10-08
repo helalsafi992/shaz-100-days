@@ -261,3 +261,71 @@ test("M08 batch allocation buys once on cooking day and never doubles personal n
     ),
   );
 });
+
+test("T06 pause/restart preserves completed history and day 100, reduces actual volume without catch-up", async () => {
+  const { scheduledStrength, scheduledCardio, easyRestartOn } =
+    await import("../lib/schedule-breaks");
+  const plans = generatePlan(hybrid),
+    raw = plans.map((plan) => ({
+      id: String(plan.day),
+      scheduled_date: plan.date,
+      status: plan.kind === "workout" ? "planned" : "rest",
+      plan,
+    }));
+  const breaks = [
+    {
+      id: "pause",
+      from_date: hybrid.startDate!,
+      to_date: addDays(hybrid.startDate!, 3),
+      restart: "easy" as const,
+    },
+  ];
+  const before = JSON.stringify(raw),
+    projected = raw.map((d) => scheduledStrength(d, breaks));
+  assert.equal(projected.length, 100);
+  assert.equal(projected[99].plan.kind, "finish");
+  assert.equal(projected[0].status, "paused");
+  assert.equal(projected[0].id, raw[0].id);
+  const easy = projected.find((d) => d.plan.easyRestart)!;
+  const original = raw.find((d) => d.id === easy.id)!;
+  assert.ok(
+    easy.plan.exercises.every(
+      (e, i) => e.sets === Math.max(1, original.plan.exercises[i].sets - 1),
+    ),
+  );
+  const completed = { ...raw[0], status: "completed" };
+  assert.deepEqual(scheduledStrength(completed, breaks), completed);
+  assert.equal(JSON.stringify(raw), before);
+  assert.equal(easyRestartOn(addDays(breaks[0].to_date, 8), breaks), false);
+  const stopped = [
+    { ...breaks[0], restart_until: addDays(breaks[0].to_date, 2) },
+  ];
+  assert.equal(easyRestartOn(addDays(breaks[0].to_date, 3), stopped), false);
+  assert.equal(easyRestartOn(addDays(breaks[0].to_date, 1), stopped), true);
+  const cardio = generateCardio(hybrid).map((plan) => ({
+    scheduled_date: plan.date,
+    status: "planned",
+    plan,
+  }));
+  const c = cardio.find((c) => easyRestartOn(c.scheduled_date, breaks))!;
+  assert.ok(scheduledCardio(c, breaks).plan.selected.minutes <= 20);
+  assert.ok(
+    scheduledCardio(c, breaks).plan.options.every((o) => o.minutes <= 20),
+  );
+  const calendar = activityForDate(
+    raw[0].scheduled_date,
+    projected,
+    [],
+    [
+      {
+        weekday: new Date(raw[0].scheduled_date).getUTCDay(),
+        name: "Sport",
+        minutes: 45,
+        hard: true,
+      },
+    ],
+    breaks,
+  );
+  assert.equal(calendar.label, "Planlagt pause");
+  assert.equal(calendar.hasActivity, false);
+});

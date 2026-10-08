@@ -1,3 +1,5 @@
+import { scheduledStrength } from "@/lib/schedule-breaks";
+import { scheduleBreaks, assertNoBreak } from "@/lib/break-store";
 import { headers as nextHeaders } from "next/headers";
 import { z } from "zod";
 import { access, session, admin, acceptInvite, requestLogin } from "@/lib/auth";
@@ -63,6 +65,7 @@ export async function GET(
         "shaz_meal_days",
         "shaz_cardio",
         "shaz_workout_drafts",
+        "shaz_schedule_breaks",
         "shaz_days",
         "shaz_meals",
         "shaz_weights",
@@ -321,37 +324,55 @@ export async function POST(
             .max(80),
         })
         .parse(input);
-      const d = await ownedDay(s.user.id, v.id);
-      if (d.plan.kind !== "workout" || d.scheduled_date > localDate())
-        throw new HttpError(
-          400,
-          "Træningen kan først registreres på dens dato.",
+      return await transaction(async (c) => {
+        await c.query(
+          "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+          [s.user.id],
         );
-      if (
-        v.sets.some(
-          (set) =>
-            ![
-              ...d.plan.exercises,
-              ...(d.plan.archivedExercises || []),
-              ...(d.plan.removedExercises || []),
-            ].some((e) => e.id === set.exercise && set.set <= e.sets),
-        ) ||
-        new Set(v.sets.map((x) => x.exercise + ":" + x.set)).size !==
-          v.sets.length
-      )
-        throw new HttpError(400, "Registreringen passer ikke til træningen.");
-      if (v.complete && (!v.sets.length || v.sets.every((x) => x.reps === 0)))
-        throw new HttpError(400, "Registrér mindst ét gennemført sæt.");
-      await db().query(
-        `UPDATE shaz_days SET log=$3,status=$4,completed_at=CASE WHEN $4='completed' THEN COALESCE(completed_at,now()) ELSE NULL END,updated_at=now() WHERE id=$1 AND user_id=$2`,
-        [
-          v.id,
-          s.user.id,
-          JSON.stringify({ sets: v.sets }),
-          v.complete ? "completed" : "planned",
-        ],
-      );
-      return Response.json({ ok: true });
+        const q = await c.query(
+          "SELECT *,scheduled_date::text FROM shaz_days WHERE user_id=$1 AND id=$2 FOR UPDATE",
+          [s.user.id, v.id],
+        );
+        if (!q.rowCount) throw new HttpError(404, "Træningen findes ikke.");
+        const d = q.rows[0] as Awaited<ReturnType<typeof ownedDay>>;
+        if (d.status !== "completed")
+          await assertNoBreak(c, s.user.id, d.scheduled_date);
+        if (d.plan.kind !== "workout" || d.scheduled_date > localDate())
+          throw new HttpError(
+            400,
+            "Træningen kan først registreres på dens dato.",
+          );
+        if (
+          v.sets.some(
+            (set) =>
+              ![
+                ...d.plan.exercises,
+                ...(d.plan.archivedExercises || []),
+                ...(d.plan.removedExercises || []),
+              ].some((e) => e.id === set.exercise && set.set <= e.sets),
+          ) ||
+          new Set(v.sets.map((x) => x.exercise + ":" + x.set)).size !==
+            v.sets.length
+        )
+          throw new HttpError(400, "Registreringen passer ikke til træningen.");
+        if (v.complete && (!v.sets.length || v.sets.every((x) => x.reps === 0)))
+          throw new HttpError(400, "Registrér mindst ét gennemført sæt.");
+        await c.query(
+          `UPDATE shaz_days SET log=$3,status=$4,plan=$5,completed_at=CASE WHEN $4='completed' THEN COALESCE(completed_at,now()) ELSE NULL END,updated_at=now() WHERE id=$1 AND user_id=$2`,
+          [
+            v.id,
+            s.user.id,
+            JSON.stringify({ sets: v.sets }),
+            v.complete ? "completed" : "planned",
+            JSON.stringify(
+              v.complete
+                ? scheduledStrength(d, await scheduleBreaks(s.user.id, c)).plan
+                : d.plan,
+            ),
+          ],
+        );
+        return Response.json({ ok: true });
+      });
     }
     if (
       path === "swap-exercise" ||
@@ -361,75 +382,102 @@ export async function POST(
       const v = z
         .object({ id, exercise: id, replacement: id.optional() })
         .parse(input);
-      const d = await ownedDay(s.user.id, v.id);
-      if (d.status === "completed" || d.scheduled_date < localDate())
-        throw new HttpError(
-          409,
-          "En historisk eller påbegyndt træning ændres ikke.",
+      const exerciseCatalog = (await catalog("exercise")) as Exercise[];
+      return await transaction(async (c) => {
+        await c.query(
+          "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+          [s.user.id],
         );
-      const old = [
-        ...d.plan.exercises,
-        ...(d.plan.removedExercises || []),
-      ].find((e) => e.id === v.exercise);
-      if (!old) throw new HttpError(404, "Øvelsen findes ikke.");
-      if (path === "remove-exercise") {
-        d.plan.removedExercises = [...(d.plan.removedExercises || []), old];
-        d.plan.exercises = d.plan.exercises.filter((e) => e.id !== old.id);
-        await db().query(
-          "UPDATE shaz_days SET plan=$3 WHERE id=$1 AND user_id=$2",
+        const q = await c.query(
+          "SELECT *,scheduled_date::text FROM shaz_days WHERE user_id=$1 AND id=$2 FOR UPDATE",
+          [s.user.id, v.id],
+        );
+        if (!q.rowCount) throw new HttpError(404, "Træningen findes ikke.");
+        const d = q.rows[0] as Awaited<ReturnType<typeof ownedDay>>;
+        if (d.status !== "completed")
+          await assertNoBreak(c, s.user.id, d.scheduled_date);
+        if (d.status === "completed" || d.scheduled_date < localDate())
+          throw new HttpError(
+            409,
+            "En historisk eller påbegyndt træning ændres ikke.",
+          );
+        const old = [
+          ...d.plan.exercises,
+          ...(d.plan.removedExercises || []),
+        ].find((e) => e.id === v.exercise);
+        if (!old) throw new HttpError(404, "Øvelsen findes ikke.");
+        if (path === "remove-exercise") {
+          d.plan.removedExercises = [...(d.plan.removedExercises || []), old];
+          d.plan.exercises = d.plan.exercises.filter((e) => e.id !== old.id);
+          await c.query(
+            "UPDATE shaz_days SET plan=$3 WHERE id=$1 AND user_id=$2",
+            [v.id, s.user.id, JSON.stringify(d.plan)],
+          );
+          return Response.json({
+            ok: true,
+            message:
+              "Øvelsen er fjernet. En bevægelsesfunktion mangler nu. Vælg selv en erstatning; dine registreringer er bevaret.",
+          });
+        }
+        const option =
+          old &&
+          [
+            old,
+            ...alternatives(
+              old,
+              { ...p.data, equipment: d.plan.equipment || p.data.equipment },
+              exerciseCatalog,
+            ),
+          ].find((e) => e.id === v.replacement);
+        if (!old || !option)
+          throw new HttpError(400, "Alternativet passer ikke til dit udstyr.");
+        d.plan.archivedExercises = [
+          ...(d.plan.archivedExercises || []).filter((e) => e.id !== old.id),
+          old,
+        ];
+        if (path === "restore-exercise") {
+          d.plan.exercises.push({ ...old, ...option });
+          d.plan.removedExercises = (d.plan.removedExercises || []).filter(
+            (e) => e.id !== old.id,
+          );
+        } else
+          d.plan.exercises = d.plan.exercises.map((e) =>
+            e.id === old.id ? { ...e, ...option } : e,
+          );
+        await c.query(
+          "UPDATE shaz_days SET plan=$3,updated_at=now() WHERE id=$1 AND user_id=$2",
           [v.id, s.user.id, JSON.stringify(d.plan)],
         );
-        return Response.json({
-          ok: true,
-          message:
-            "Øvelsen er fjernet. En bevægelsesfunktion mangler nu. Vælg selv en erstatning; dine registreringer er bevaret.",
-        });
-      }
-      const option =
-        old &&
-        [
-          old,
-          ...alternatives(
-            old,
-            { ...p.data, equipment: d.plan.equipment || p.data.equipment },
-            (await catalog("exercise")) as Exercise[],
-          ),
-        ].find((e) => e.id === v.replacement);
-      if (!old || !option)
-        throw new HttpError(400, "Alternativet passer ikke til dit udstyr.");
-      d.plan.archivedExercises = [
-        ...(d.plan.archivedExercises || []).filter((e) => e.id !== old.id),
-        old,
-      ];
-      if (path === "restore-exercise") {
-        d.plan.exercises.push({ ...old, ...option });
-        d.plan.removedExercises = (d.plan.removedExercises || []).filter(
-          (e) => e.id !== old.id,
-        );
-      } else
-        d.plan.exercises = d.plan.exercises.map((e) =>
-          e.id === old.id ? { ...e, ...option } : e,
-        );
-      await db().query(
-        "UPDATE shaz_days SET plan=$3,updated_at=now() WHERE id=$1 AND user_id=$2",
-        [v.id, s.user.id, JSON.stringify(d.plan)],
-      );
-      return Response.json({ ok: true });
+        return Response.json({ ok: true });
+      });
     }
     if (path === "skip") {
       const v = z.object({ id }).parse(input);
-      const d = await ownedDay(s.user.id, v.id);
-      if (d.plan.kind !== "workout" || d.status === "completed")
-        throw new HttpError(400, "Dette pas kan ikke springes over.");
-      await db().query(
-        "UPDATE shaz_days SET status='skipped',updated_at=now() WHERE id=$1 AND user_id=$2",
-        [v.id, s.user.id],
-      );
-      return Response.json({ ok: true });
+      return await transaction(async (c) => {
+        await c.query(
+          "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
+          [s.user.id],
+        );
+        const q = await c.query(
+          "SELECT *,scheduled_date::text FROM shaz_days WHERE user_id=$1 AND id=$2 FOR UPDATE",
+          [s.user.id, v.id],
+        );
+        if (!q.rowCount) throw new HttpError(404, "Træningen findes ikke.");
+        const d = q.rows[0] as Awaited<ReturnType<typeof ownedDay>>;
+        if (d.status !== "completed")
+          await assertNoBreak(c, s.user.id, d.scheduled_date);
+        if (d.plan.kind !== "workout" || d.status === "completed")
+          throw new HttpError(400, "Dette pas kan ikke springes over.");
+        await c.query(
+          "UPDATE shaz_days SET status='skipped',updated_at=now() WHERE id=$1 AND user_id=$2",
+          [v.id, s.user.id],
+        );
+        return Response.json({ ok: true });
+      });
     }
     if (path === "reschedule") {
       const v = z.object({ id, date }).parse(input);
-      const d = await ownedDay(s.user.id, v.id);
+      let d = await ownedDay(s.user.id, v.id);
       if (
         d.status !== "planned" ||
         Object.keys(d.log).length ||
@@ -445,6 +493,27 @@ export async function POST(
           "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
           [s.user.id],
         );
+        const current = await c.query(
+          "SELECT *,scheduled_date::text FROM shaz_days WHERE user_id=$1 AND id=$2 FOR UPDATE",
+          [s.user.id, v.id],
+        );
+        const draft = await c.query(
+          "SELECT 1 FROM shaz_workout_drafts WHERE user_id=$1 AND day_id=$2",
+          [s.user.id, v.id],
+        );
+        d = current.rows[0];
+        if (
+          !d ||
+          d.status !== "planned" ||
+          Object.keys(d.log).length ||
+          draft.rowCount
+        )
+          throw new HttpError(
+            409,
+            "Passet er allerede ændret eller påbegyndt. Genindlæs planen.",
+          );
+        await assertNoBreak(c, s.user.id, d.scheduled_date);
+        await assertNoBreak(c, s.user.id, v.date);
         const rest = await c.query(
           "SELECT id,scheduled_date::text FROM shaz_days WHERE user_id=$1 AND scheduled_date=$2 AND status='rest' FOR UPDATE",
           [s.user.id, v.date],
@@ -586,7 +655,14 @@ export async function POST(
       return Response.json({ ok: true });
     }
     if (path === "shopping") {
-      const v = z.object({ week: date, id, on: z.boolean(),count:z.number().int().min(1).max(14).default(7) }).parse(input);
+      const v = z
+        .object({
+          week: date,
+          id,
+          on: z.boolean(),
+          count: z.number().int().min(1).max(14).default(7),
+        })
+        .parse(input);
       if (!ingredients.some((i) => i.id === v.id))
         throw new HttpError(400, "Ukendt råvare.");
       const { mealDays } = await import("@/lib/planning-store");

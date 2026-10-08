@@ -145,6 +145,9 @@ export default function FoodPlanner({
     [amount, setAmount] = useState(1);
   const [pendingChoice, setPendingChoice] = useState<MealOption | null>(null),
     [showMore, setShowMore] = useState(false);
+  const [pendingShopping, setPendingShopping] = useState<
+    Record<string, boolean>
+  >({});
   const [batchSlot, setBatchSlot] = useState<MealSlot | null>(null);
   useEffect(() => {
     setPendingChoice(null);
@@ -343,21 +346,45 @@ export default function FoodPlanner({
                       <label className="shopping-item" key={i.id}>
                         <input
                           type="checkbox"
-                          checked={shopping.some(
-                            (s) =>
-                              s.week === date &&
-                              s.ingredient_id === i.id &&
-                              s.checked &&
-                              Number(s.checked_grams || 0) >= i.grams,
+                          disabled={Object.hasOwn(
+                            pendingShopping,
+                            `${date}:${shoppingDays}:${i.id}`,
                           )}
-                          onChange={(ev) =>
-                            action("shopping", {
-                              week: date,
-                              id: i.id,
-                              on: ev.target.checked,
-                              count: shoppingDays,
-                            })
+                          aria-busy={Object.hasOwn(
+                            pendingShopping,
+                            `${date}:${shoppingDays}:${i.id}`,
+                          )}
+                          checked={
+                            pendingShopping[
+                              `${date}:${shoppingDays}:${i.id}`
+                            ] ??
+                            shopping.some(
+                              (s) =>
+                                s.week === date &&
+                                s.ingredient_id === i.id &&
+                                s.checked &&
+                                Number(s.checked_grams || 0) >= i.grams,
+                            )
                           }
+                          onChange={async (ev) => {
+                            const key = `${date}:${shoppingDays}:${i.id}`,
+                              on = ev.target.checked;
+                            setPendingShopping((s) => ({ ...s, [key]: on }));
+                            try {
+                              await action("shopping", {
+                                week: date,
+                                id: i.id,
+                                on,
+                                count: shoppingDays,
+                              });
+                            } finally {
+                              setPendingShopping((s) => {
+                                const next = { ...s };
+                                delete next[key];
+                                return next;
+                              });
+                            }
+                          }}
                         />
                         <span>
                           {i.name}

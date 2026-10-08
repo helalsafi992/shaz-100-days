@@ -101,6 +101,7 @@ let browser: import("playwright-core").Browser;
 let server: ChildProcess | undefined;
 let serverOutput = "";
 let ownerOtpSeed = "";
+let pauseFixture: { email: string; password: string; id: string };
 async function check(name: string, fn: () => Promise<void>) {
   await fn();
   results.push({ name, status: "passed" });
@@ -1591,6 +1592,185 @@ try {
       }
     },
   );
+  await check(
+    "T06/S01: pause preview, stale draft conflict, persistent restart, protected logs and exact 100 days",
+    async () => {
+      const email = "pause-fixture@example.invalid",
+        password = randomBytes(20).toString("hex");
+      const signup = await auth().api.signUpEmail({
+        body: { name: "Pause fixture", email, password },
+        asResponse: true,
+      });
+      assert.equal(signup.status, 200);
+      const account = await signup.json();
+      pauseFixture = { email, password, id: account.user.id };
+      const id = account.user.id,
+        h = new Headers({
+          origin: env.APP_URL,
+          "Content-Type": "application/json",
+        });
+      applyAuthCookies(h, signup);
+      await db().query(
+        'UPDATE shaz_user SET "emailVerified"=true WHERE id=$1',
+        [id],
+      );
+      await db().query(
+        "INSERT INTO shaz_orders(id,checkout_id,email,user_id,amount,currency,livemode,status,product,terms_version) VALUES($1,$2,$3,$4,39900,'dkk',false,'paid','shaz-100-days','fixture')",
+        [crypto.randomUUID(), "cs_pause_fixture", email, id],
+      );
+      await saveProfile(
+        id,
+        {
+          ...profiles[0],
+          cardio: {
+            days: 1,
+            weekdays: [(weekday + 1) % 7],
+            minutes: 20,
+            forms: ["walk"],
+            equipment: ["outdoors"],
+            level: "beginner",
+            intensity: "easy",
+          },
+        },
+        7,
+      );
+      await activate(id);
+      const initial = await snapshot(id),
+        day = initial.days.find((d) => d.scheduled_date === today),
+        sets = [
+          {
+            exercise: day.plan.exercises[0].id,
+            set: 1,
+            reps: 8,
+            kg: 0,
+            effort: 6,
+          },
+        ];
+      const config = { from: today, to: addDays(today, 3), restart: "easy" };
+      const preview = await planpost("break-preview", config, h);
+      assert.equal(preview.status, 200, JSON.stringify(preview.data));
+      assert.equal((await snapshot(id)).breaks.length, 0);
+      assert.equal(
+        (
+          await post(
+            "workout-draft",
+            { id: day.id, sets, timerEnd: 0, revision: 0 },
+            h,
+          )
+        ).status,
+        200,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "break-confirm",
+            { ...config, fingerprint: preview.data.fingerprint },
+            h,
+          )
+        ).status,
+        409,
+      );
+      const fresh = await planpost("break-preview", config, h);
+      assert.equal(
+        (
+          await planpost(
+            "break-confirm",
+            { ...config, fingerprint: fresh.data.fingerprint },
+            h,
+          )
+        ).status,
+        200,
+      );
+      const paused = await snapshot(id);
+      assert.equal(paused.days.length, 100);
+      assert.equal(paused.days.find((d) => d.id === day.id).status, "paused");
+      assert.deepEqual(paused.drafts[0].data.sets, sets);
+      assert.equal(paused.profile.start_date, initial.profile.start_date);
+      assert.deepEqual(paused.profile.data, initial.profile.data);
+      assert.equal(
+        (await post("workout", { id: day.id, sets, complete: true }, h)).status,
+        409,
+      );
+      assert.equal(
+        (
+          await post(
+            "workout-draft",
+            { id: day.id, sets, timerEnd: 0, revision: 1 },
+            h,
+          )
+        ).status,
+        409,
+      );
+      const c = paused.cardio.find((c) => c.status === "paused");
+      assert.ok(c);
+      assert.equal(
+        (
+          await planpost(
+            "cardio",
+            { id: c.id, action: "log", minutes: 15, effort: 3 },
+            h,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "break-cancel",
+            { id: paused.breaks[0].id },
+            users[0].headers,
+          )
+        ).status,
+        404,
+      );
+      assert.equal(
+        (await planpost("break-cancel", { id: paused.breaks[0].id }, h)).status,
+        200,
+      );
+      const resumed = await snapshot(id);
+      assert.deepEqual(resumed.days, initial.days);
+      assert.deepEqual(resumed.drafts[0].data.sets, sets);
+      assert.equal(
+        (await post("workout", { id: day.id, sets, complete: true }, h)).status,
+        200,
+      );
+      const done = await snapshot(id),
+        again = await planpost("break-preview", config, h);
+      assert.equal(
+        (
+          await planpost(
+            "break-confirm",
+            { ...config, fingerprint: again.data.fingerprint },
+            h,
+          )
+        ).status,
+        200,
+      );
+      assert.deepEqual(
+        (await snapshot(id)).days.find((d) => d.id === day.id),
+        done.days.find((d) => d.id === day.id),
+      );
+      // A previous pause must not be extended when its remaining restart is cancelled.
+      const b = (await snapshot(id)).breaks[0];
+      await db().query(
+        "UPDATE shaz_schedule_breaks SET from_date=$2,to_date=$3 WHERE id=$1",
+        [b.id, addDays(today, -5), addDays(today, -3)],
+      );
+      assert.equal(
+        (await planpost("break-cancel", { id: b.id }, h)).status,
+        200,
+      );
+      const historical = (await snapshot(id)).breaks[0];
+      assert.equal(historical.to_date, addDays(today, -3));
+      assert.equal(historical.restart_until, addDays(today, -1));
+      const invalid = await planpost(
+        "break-preview",
+        { ...config, to: addDays(initial.profile.start_date, 99) },
+        h,
+      );
+      assert.equal(invalid.status, 400);
+    },
+  );
   // Browser is started in this process tree so it shares the isolated test network.
   const { chromium: pw } = await import("playwright-core");
 
@@ -1720,6 +1900,122 @@ try {
         assert.deepEqual(errors, []);
         await context.close();
       }
+    },
+  );
+  await check(
+    "T06/M08/M10 mobile UI: password login, cancelled preview, persistent pause and batch, saved grouped shopping",
+    async () => {
+      const context = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      const page = await context.newPage();
+      await page.goto(env.APP_URL + "/login");
+      await page.getByLabel("E-mail", { exact: true }).fill(pauseFixture.email);
+      await page
+        .getByLabel("Adgangskode", { exact: true })
+        .fill(pauseFixture.password);
+      await page.getByRole("button", { name: "Log ind", exact: true }).click();
+      await page.waitForURL("**/app");
+      await page.goto(env.APP_URL + "/app/training");
+      await page
+        .getByRole("button", { name: "Planlæg pause", exact: true })
+        .click();
+      await page.getByLabel("Første pausedag").fill(addDays(today, 1));
+      await page.getByLabel("Sidste pausedag").fill(addDays(today, 3));
+      await page
+        .getByRole("button", { name: "Se ændringer", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Bekræft pause", exact: true })
+        .waitFor();
+      const before = (await snapshot(pauseFixture.id)).breaks.length;
+      await page.keyboard.press("Escape");
+      assert.equal((await snapshot(pauseFixture.id)).breaks.length, before);
+      await page
+        .getByRole("button", { name: "Planlæg pause", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Se ændringer", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Bekræft pause", exact: true })
+        .click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page.reload();
+      assert.equal((await snapshot(pauseFixture.id)).breaks.length, before + 1);
+      assert.ok(
+        (await page.locator("body").textContent())?.includes(
+          "Rolig genstart i syv dage derefter.",
+        ),
+      );
+      await page.screenshot({
+        path: "test-artifacts/mobile-pause.png",
+        fullPage: false,
+      });
+      await page.goto(env.APP_URL + "/app/food");
+      await page.locator(".meal-card").first().waitFor();
+      const card = page.locator(".meal-card").first();
+      await card.locator("summary").click();
+      await card
+        .getByRole("button", { name: "Lav også til i morgen", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Se portioner og indkøb", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Bekræft fælles madlavning", exact: true })
+        .waitFor();
+      await page.screenshot({
+        path: "test-artifacts/mobile-batch-preview.png",
+        fullPage: false,
+      });
+      await page
+        .getByRole("button", { name: "Bekræft fælles madlavning", exact: true })
+        .click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page.reload();
+      await page
+        .getByRole("button", { name: "Opløs sammenkædning", exact: true })
+        .first()
+        .waitFor();
+      const batchRows = await mealDays(pauseFixture.id, today, 2, false);
+      assert.equal(
+        batchRows[0].data.slots[0].batch.id,
+        batchRows[1].data.slots[0].batch.id,
+      );
+      assert.equal(batchRows[0].data.slots[0].status, "planned");
+      assert.equal(batchRows[1].data.slots[0].status, "planned");
+      await page.getByRole("tab", { name: "Indkøb", exact: true }).click();
+      assert.ok((await page.getByRole("region").count()) > 1);
+      await Promise.all([
+        page.waitForResponse(
+          (r) => r.url().endsWith("/api/platform/state") && r.status() === 200,
+        ),
+        page.getByRole("checkbox").first().check(),
+      ]);
+      await page
+        .locator(".shopping-item input:checked:not(:disabled)")
+        .first()
+        .waitFor();
+      await page.reload();
+      await page.getByRole("tab", { name: "Indkøb", exact: true }).click();
+      assert.ok(await page.getByRole("checkbox").first().isChecked());
+      await page.getByLabel("Antal dage i indkøbet").selectOption("14");
+      await page.waitForLoadState("networkidle");
+      assert.equal(await page.getByRole("checkbox").first().isChecked(), false);
+      await page.screenshot({
+        path: "test-artifacts/mobile-shopping-groups.png",
+        fullPage: false,
+      });
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+      );
+      await context.close();
     },
   );
   await check(

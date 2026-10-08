@@ -9,18 +9,23 @@ export function activityForDate(
     minutes: number;
     hard: boolean;
   }[] = [],
+  breaks: import("./schedule-breaks").ScheduleBreak[] = [],
 ) {
+  const paused = breaks.some((b) => date >= b.from_date && date <= b.to_date);
   const strength = days.find(
     (d) => d.scheduled_date === date && d.plan.kind === "workout",
   );
   const conditioning = cardio.filter(
     (c) => c.scheduled_date === date && c.status !== "removed",
   );
-  const activeStrength = !!strength && strength.status !== "skipped";
-  const activeCardio = conditioning.some((c) => c.status !== "skipped");
-  const otherSport = sport.filter(
-    (s) => s.weekday === new Date(date + "T12:00:00Z").getUTCDay(),
+  const activeStrength =
+    !!strength && !["skipped", "paused"].includes(strength.status);
+  const activeCardio = conditioning.some(
+    (c) => !["skipped", "paused"].includes(c.status),
   );
+  const otherSport = sport
+    .filter((s) => s.weekday === new Date(date + "T12:00:00Z").getUTCDay())
+    .filter(() => !paused);
   return {
     strength,
     cardio: conditioning,
@@ -32,11 +37,13 @@ export function activityForDate(
           ? "Styrke"
           : activeCardio
             ? "Cardio"
-            : otherSport.length
-              ? "Anden sport"
-              : strength || conditioning.length
-                ? "Pas sprunget over"
-                : "Restitution",
+            : paused
+              ? "Planlagt pause"
+              : otherSport.length
+                ? "Anden sport"
+                : strength || conditioning.length
+                  ? "Pas sprunget over"
+                  : "Restitution",
     hasActivity: activeStrength || activeCardio || otherSport.length > 0,
   };
 }

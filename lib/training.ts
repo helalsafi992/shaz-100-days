@@ -437,6 +437,8 @@ export type DayPlan = {
   equipment?: Profile["equipment"];
   split?: "full" | "upper" | "lower";
   explanations?: string[];
+  paused?: boolean;
+  easyRestart?: boolean;
 };
 export function hasEquipment(e: Exercise, p: Profile) {
   return e.equipment.every(

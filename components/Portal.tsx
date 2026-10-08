@@ -4,6 +4,8 @@ import { activityForDate, activityCounts } from "@/lib/activity";
 import { useWorkoutDraft } from "./useWorkoutDraft";
 import FoodPlanner, { FoodSummary } from "./FoodPlanner";
 import CardioPlanner, { type CardioRow } from "./CardioPlanner";
+import ScheduleBreaks from "./ScheduleBreaks";
+import type { ScheduleBreak } from "@/lib/schedule-breaks";
 import SessionAdjustment from "./SessionAdjustment";
 import { labels, energy, addDays, type Profile } from "@/lib/profile";
 import {
@@ -44,6 +46,7 @@ type Meal = {
 };
 export type PlatformState = {
   accountId?: string;
+  breaks?: ScheduleBreak[];
   drafts?: {
     day_id: string;
     data: { sets: SetLog[]; timerEnd: number };
@@ -105,13 +108,20 @@ export default function Portal({
   );
   const counts = activityCounts(state.days, state.cardio || []);
   const calendar = (date: string) =>
-    activityForDate(date, state.days, state.cardio || [], p.otherSport || []);
+    activityForDate(
+      date,
+      state.days,
+      state.cardio || [],
+      p.otherSport || [],
+      state.breaks || [],
+    );
   const today = state.days.find((d) => d.scheduled_date === state.today);
   const cardioToday = (state.cardio || []).find(
     (c) =>
       c.scheduled_date === state.today &&
       c.status !== "removed" &&
-      c.status !== "skipped",
+      c.status !== "skipped" &&
+      c.status !== "paused",
   );
   async function refreshState() {
     const r = await fetch("/api/platform/state", { cache: "no-store" });
@@ -272,15 +282,23 @@ export default function Portal({
                     <p>
                       {ended || state.day === 100
                         ? "Vælg to vaner, du vil fortsætte med. Sammenlign dine første og seneste registreringer i Fremgang. Du behøver ikke sætte en personlig rekord for at afslutte godt."
-                        : cardioToday
-                          ? `${cardioToday.plan.selected.minutes} minutters cardio. ${cardioToday.plan.selected.intensity}`
-                          : calendar(state.today).otherSport.length
-                            ? "Din anden sport indgår i ugeplanens belastning. Der tilføjes ikke automatisk ekstra træning."
-                            : "En restitutionsdag er en del af planen. Du skal ikke indhente et misset pas i dag."}
+                        : today?.plan.paused
+                          ? "Din træning er sat på pause. Historik og kladder er bevaret. Madplan og kaloriemål ændres ikke automatisk."
+                          : cardioToday
+                            ? `${cardioToday.plan.selected.minutes} minutters cardio. ${cardioToday.plan.selected.intensity}`
+                            : calendar(state.today).otherSport.length
+                              ? "Din anden sport indgår i ugeplanens belastning. Der tilføjes ikke automatisk ekstra træning."
+                              : "En restitutionsdag er en del af planen. Du skal ikke indhente et misset pas i dag."}
                     </p>
                     <a
                       className="p-button"
-                      href={ended ? "/app/progress" : "/app/training#cardio"}
+                      href={
+                        ended
+                          ? "/app/progress"
+                          : today?.plan.paused
+                            ? "/app/training#pause"
+                            : "/app/training#cardio"
+                      }
                     >
                       {ended
                         ? "Se din registrerede fremgang"
@@ -363,6 +381,12 @@ export default function Portal({
                 Tilpas styrke, udstyr og ugerytme
               </a>
             </p>
+            <ScheduleBreaks
+              breaks={state.breaks || []}
+              today={state.today}
+              start={state.profile.start_date}
+              refresh={refreshState}
+            />
             <CardioPlanner
               profile={p}
               rows={state.cardio || []}
@@ -437,7 +461,8 @@ export default function Portal({
                           .filter(
                             (c) =>
                               c.scheduled_date === d.scheduled_date &&
-                              c.status !== "removed",
+                              c.status !== "removed" &&
+                              c.status !== "paused",
                           )
                           .map((c) => (
                             <div className="training-day" key={c.id}>
@@ -482,7 +507,9 @@ export default function Portal({
                           <p className="p-note">
                             {d.plan.kind === "finish"
                               ? "Dag 100 · Afslutning og dine næste skridt."
-                              : "Restitution. Missede pas flyttes ikke automatisk til i morgen."}
+                              : d.plan.paused
+                                ? "Planlagt pause. Dine tidligere registreringer og kladder er bevaret."
+                                : "Restitution. Missede pas flyttes ikke automatisk til i morgen."}
                           </p>
                         )}
                       </div>
@@ -1065,6 +1092,12 @@ function Workout({
         </span>
         <h2>{day.plan.title}</h2>
         <p>{day.plan.focus}</p>
+        {day.plan.easyRestart && (
+          <p className="p-notice">
+            Rolig genstart: ét sæt mindre og let belastning. Eventuelle
+            tidligere indtastede sæt er stadig bevaret.
+          </p>
+        )}
         <p className="draft-status" role="status">
           {saveStatus}
         </p>

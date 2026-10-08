@@ -10,6 +10,7 @@ export async function resetTestProfile(user: string, populated: boolean) {
   await transaction(async (c) => {
     for (const table of [
       "shaz_workout_drafts",
+      "shaz_schedule_breaks",
       "shaz_cardio",
       "shaz_meal_days",
       "shaz_days",

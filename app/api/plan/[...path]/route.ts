@@ -1,3 +1,4 @@
+import { changeBreak, cancelBreak } from "@/lib/break-store";
 import { z } from "zod";
 import { access } from "@/lib/auth";
 import { sameOrigin, failure, body, rate, HttpError } from "@/lib/security";
@@ -52,6 +53,28 @@ export async function POST(
     await rate("plan:" + s.user.id, 180, 5);
     const input = await body(req),
       path = (await params).path.join("/");
+    if (path === "break-preview" || path === "break-confirm")
+      return Response.json(
+        await changeBreak(
+          s.user.id,
+          z
+            .object({
+              from: date,
+              to: date,
+              restart: z.enum(["normal", "easy"]),
+              fingerprint: z.string().max(64).optional(),
+            })
+            .parse(input),
+          path === "break-confirm",
+        ),
+      );
+    if (path === "break-cancel")
+      return Response.json(
+        await cancelBreak(
+          s.user.id,
+          z.object({ id: z.string().uuid() }).parse(input).id,
+        ),
+      );
     if (path === "batch-preview" || path === "batch-confirm")
       return Response.json(
         await mealBatch(

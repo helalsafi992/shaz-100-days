@@ -24,6 +24,22 @@ De deployede skærmbilleder i `docs/evidence` er desktop fra faktisk indlogget R
 
 Den friske password-session ovenfor er testet gennem den almindelige HTTP-authentificering; browserkontrollen brugte den eksisterende autoriserede session. Disse er to forskellige observationer, ikke påstand om en ny browser-loginindtastning i Railway.
 
-MFA og batch-/restefunktionerne tilføjes efter den første masterdeployment. Deres slutcommit/deployment kontrolleres særskilt ved aflevering; denne første verifikation er ikke i sig selv bevis for de efterfølgende ændringer.
+## MFA og rester — verificeret deployment
+
+Commit `f2da4be8d592d638b94189cc9b9f216e52083205`:
+
+- Produktion `92fcf19b-a5d1-4fb9-ae6a-fc8910bbaad1`: SUCCESS.
+- Test `47c6a79c-9881-4daa-ab88-98162ede1e7c`: SUCCESS; health HTTP 200 med commit.
+- Frisk almindelig password-session: login 200, platform-state 200, plan-state 200. Admin-API kræver separat MFA (428 uden godkendelse). Logout afviser derefter beskyttet state (401).
+- Faktisk indlogget Railway-browser: fælles madlavning viser portioner for to datoer, summerede ingredienser én gang og særskilt personlig energi. Forhåndsvisningen blev annulleret; ejerprofilen blev ikke ændret. Indkøb vises i varegrupper med rå/drænet vægtgrundlag. Screenshot `deployed-desktop-batch-preview-f2da4be.jpg`.
+- Offentlig forside kontrolleret: synligt login, korrekt pris, eksisterende adresse og lukkede salgsfunktioner.
+
+## Efterfølgende pauseleverance
+
+Migration 009 er additiv. Ingen tabeller eller kundedata slettes ved deployment. Pause og rolig genstart bruger en separat kundeejet periode, serverkontrol og stabile pas-ID'er. Afslutning er stadig præcis dag 100. De 19 domænegrupper og 32 integrationstestgrupper består; de nye `local-mobile-pause`, `local-mobile-batch-preview` og `local-mobile-shopping-groups` er fra samme byggede app i den isolerede lokale browser. Railway-slutcommit og deployment-ID oplyses særskilt ved aflevering efter kontrollen.
+
+## Drift og svartid
+
+Testappens region er `europe-west4-drams3a`, mens testdatabasen er `us-west2`. Der er ikke foretaget flytning af database eller video-volumes. Railway HTTP-proxy viste under f2da-kontrollen blandt andet ca. 2,0 sekunder for platform-state og 5,3 sekunder for den serverrenderede madside; dette er ikke en Core Web Vitals-måling. Pauseleverancen samler flere uafhængige dashboardlæsninger parallelt. En egentlig flytning kræver en konkret migrations-/backupplan; målet om produktionsperformance er ikke dokumenteret bestået.
 
 Se `MASTER-ACCEPTANCE.md` for alle 41 krav med faktisk status og `master-test-results.json` for den fulde lokale kørsel. Ikke alle 41 er bestået. Stripe-testkøb, faktisk mailmodtagelse, faglig/juridisk godkendelse, fuld enhedstest og de dokumenterede udviklingshuller mangler fortsat.

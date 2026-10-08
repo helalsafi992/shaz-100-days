@@ -14,7 +14,7 @@ Rigtige opkrævninger er ikke åbnet. Testkontoen bruger samme kundeområde, ege
 
 ## Udvikleransvar — må ikke flyttes over på ejer
 
-Se de udestående implementerings- og testpunkter i `MASTER-ACCEPTANCE.md`. Især sygdom/rejse, komplette nærings-/portionsregler, udvidet batch-browserkontrol og fuld tilgængelighedstest er ikke dækket af at modtage nøgler. Masterleverancen kan derfor ikke erklæres fuldført endnu.
+Se de udestående implementerings- og testpunkter i `MASTER-ACCEPTANCE.md`. Især komplette nærings-/portionsregler og fuld tilgængelighedstest er ikke dækket af at modtage nøgler. Masterleverancen kan derfor ikke erklæres fuldført endnu.
 
 Administratorer tilføjer selv deres godkendelsesapp på `/admin/security`. TOTP og gendannelseskoder håndteres af Better Auth; ingen delt MFA-nøgle udleveres eller seedes. Almindeligt kundelogin kræver ikke opsætning af MFA. Eksisterende password- og e-maillink-konti bevares.
 

@@ -129,6 +129,11 @@ export default function Account({
           <a className="p-button" href="/onboarding?edit=1">
             Tilpas min plan
           </a>
+          <p>
+            <a className="p-secondary" href="/app/training#pause">
+              Pause ved sygdom eller rejse
+            </a>
+          </p>
           <p className="p-note">
             Vælg portionsvejledning for at fjerne kropsoplysninger fra
             energiberegningen.

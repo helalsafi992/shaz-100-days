@@ -1,3 +1,5 @@
+import { scheduleBreaks } from "./break-store";
+import { scheduledStrength } from "./schedule-breaks";
 import { db, transaction, audit } from "./db";
 import {
   profileSchema,
@@ -200,46 +202,58 @@ export async function changeFuture(user: string, data: unknown) {
 }
 export async function snapshot(user: string) {
   const p = await profile(user);
-  const [days, meals, favorites, checks, weights, shopping, rs, xs] =
-    await Promise.all([
-      db().query(
-        "SELECT id,day,scheduled_date::text,plan,status,log,completed_at,revision FROM shaz_days WHERE user_id=$1 ORDER BY day",
-        [user],
-      ),
-      db().query(
-        "SELECT *,date::text FROM shaz_meals WHERE user_id=$1 ORDER BY shaz_meals.date,slot",
-        [user],
-      ),
-      db().query("SELECT recipe_id FROM shaz_favorites WHERE user_id=$1", [
-        user,
-      ]),
-      db().query(
-        "SELECT *,created_at::text FROM shaz_checkins WHERE user_id=$1 ORDER BY week",
-        [user],
-      ),
-      db().query(
-        "SELECT date::text,kg FROM shaz_weights WHERE user_id=$1 ORDER BY date",
-        [user],
-      ),
-      db().query(
-        "SELECT week,ingredient_id,checked,checked_grams FROM shaz_shopping WHERE user_id=$1",
-        [user],
-      ),
-      catalog("recipe"),
-      catalog("exercise"),
-    ]);
+  const [
+    days,
+    meals,
+    favorites,
+    checks,
+    weights,
+    shopping,
+    rs,
+    xs,
+    help,
+    drafts,
+    cardio,
+    breaks,
+  ] = await Promise.all([
+    db().query(
+      "SELECT id,day,scheduled_date::text,plan,status,log,completed_at,revision FROM shaz_days WHERE user_id=$1 ORDER BY day",
+      [user],
+    ),
+    db().query(
+      "SELECT *,date::text FROM shaz_meals WHERE user_id=$1 ORDER BY shaz_meals.date,slot",
+      [user],
+    ),
+    db().query("SELECT recipe_id FROM shaz_favorites WHERE user_id=$1", [user]),
+    db().query(
+      "SELECT *,created_at::text FROM shaz_checkins WHERE user_id=$1 ORDER BY week",
+      [user],
+    ),
+    db().query(
+      "SELECT date::text,kg FROM shaz_weights WHERE user_id=$1 ORDER BY date",
+      [user],
+    ),
+    db().query(
+      "SELECT week,ingredient_id,checked,checked_grams FROM shaz_shopping WHERE user_id=$1",
+      [user],
+    ),
+    catalog("recipe"),
+    catalog("exercise"),
+    catalog("help"),
+    db().query(
+      "SELECT day_id,data,revision,updated_at FROM shaz_workout_drafts WHERE user_id=$1",
+      [user],
+    ),
+    (await import("./cardio-store")).cardioRows(user),
+    scheduleBreaks(user),
+  ]);
   const expired = p.start_date && dayNumber(p.start_date) > 100;
-  const help = await catalog("help");
   return {
     help,
     accountId: user,
-    drafts: (
-      await db().query(
-        "SELECT day_id,data,revision,updated_at FROM shaz_workout_drafts WHERE user_id=$1",
-        [user],
-      )
-    ).rows,
-    cardio: await (await import("./cardio-store")).cardioRows(user),
+    drafts: drafts.rows,
+    cardio,
+    breaks,
     profile: p,
     day: p.start_date ? dayNumber(p.start_date) : 0,
     today: localDate(),
@@ -260,7 +274,7 @@ export async function snapshot(user: string) {
                 : [],
           },
         }))
-      : days.rows,
+      : days.rows.map((d) => scheduledStrength(d, breaks)),
     meals: meals.rows,
     favorites: favorites.rows.map((r) => r.recipe_id),
     checkins: checks.rows,
