@@ -25,3 +25,9 @@ Derudover: password-signup/e-mailbekræftelse/reset og tilbagekaldte sessioner; 
 Browserbilleder er fra den faktisk indloggede, lokalt kørte production-build med fiktive konti. Railway har separat almindelig passwordtest og konkret deploymentskontrol. De to testmiljøer forveksles ikke. Testbetalinger og mails er signerede/opsamlede fixtures, ikke faktisk StripeCheckout eller inboxlevering. Lokal backuprestore er ikke Railway-produktionsrestore. Faglige regler er endnu review; alle mikronæringsstoffer er ikke valideret. Se [LAUNCH.md](LAUNCH.md) og [NUTRITION-POLICY.md](NUTRITION-POLICY.md).
 
 Reproducer: `npm ci && npm run typecheck && npm test && npm run build && npm run test:integration`. Scriptet opretter sin egen database og fiktive konti; ingen Railway-kundedata ændres.
+
+## Offentlig Railway-verifikation
+
+[railway-verification.json](railway-verification.json) dokumenterer den konkrete deployede featureversion: ordinary password-login, anonym afvisning,100dage/38opskrifter, alle beskyttede siderHTTP200, allefire2400kcal-eksempler, mindreårig afvist, logout401og identiske madplaner efter nyt login. Testprofilens faktiske mål2635kcal blev bevaret ved2–6måltider; planerne beregnede2628–2638kcal med tre muligheder pr.plads. Profilen blev ikke ændret.
+
+En efterfølgende performanceændring samler katalogseed og ugens madplan i få databasekald; de23integrationsgrupper er kørt igen og består. Den ændrer ikke opskrifter, kalorier eller gemte valg.

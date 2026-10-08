@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T17:23:38.822Z",
+  "at": "2026-10-08T17:33:53.245Z",
   "database": "Isolated PGlite PostgreSQL via wire protocol",
   "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
   "email": "Encrypted local mail capture; no actual mailbox delivery",

@@ -1,0 +1,100 @@
+{
+  "environment": "public isolated Railway staging",
+  "health": {
+    "status": "ok",
+    "service": "shaz-100-days",
+    "version": "customer-platform-1",
+    "commit": "5a59deba152ffebce45bcf4be218e0f335162673"
+  },
+  "passwordLogin": true,
+  "anonymousDenied": true,
+  "days": 100,
+  "recipes": 38,
+  "mealPreviews": [
+    {
+      "meals": 2,
+      "target": 2635,
+      "total": 2628,
+      "alternatives": [
+        3,
+        3
+      ]
+    },
+    {
+      "meals": 3,
+      "target": 2635,
+      "total": 2629,
+      "alternatives": [
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "meals": 4,
+      "target": 2635,
+      "total": 2638,
+      "alternatives": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "meals": 5,
+      "target": 2635,
+      "total": 2636,
+      "alternatives": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "meals": 6,
+      "target": 2635,
+      "total": 2636,
+      "alternatives": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ]
+    }
+  ],
+  "deficitPreviews": [
+    {
+      "level": "moderate",
+      "target": 2160
+    },
+    {
+      "level": "high",
+      "target": 2040
+    },
+    {
+      "level": "higher",
+      "target": 1920
+    },
+    {
+      "level": "aggressive",
+      "target": 1800
+    }
+  ],
+  "minorBlocked": true,
+  "routes": {
+    "/app": 200,
+    "/app/training": 200,
+    "/app/food": 200,
+    "/app/progress": 200,
+    "/app/profile": 200,
+    "/admin": 200
+  },
+  "logoutDenied": true,
+  "secondSessionPersisted": true,
+  "mutatedProfile": false
+}

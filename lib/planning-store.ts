@@ -14,7 +14,7 @@ import { suitable, type Recipe } from "./recipes";
 import { HttpError } from "./security";
 import { isolatedTest } from "./test-environment";
 export async function requirePlanningRules(): Promise<NutritionPolicy> {
-  const list = await catalog("nutrition-rule");
+  await catalog("nutrition-rule");
   const review = isolatedTest() || process.env.APP_ENV === "test";
   const rows = await db().query(
     "SELECT data,version,status FROM shaz_content WHERE kind='nutrition-rule' AND id=$1 AND ($2 OR status='published') ORDER BY version DESC LIMIT 1",
@@ -40,42 +40,44 @@ export async function mealDays(user: string, start = localDate(), count = 7) {
   if (first > last) return [];
   const rule = await requirePlanningRules();
   const rs = (await catalog("recipe")) as Recipe[];
-  const result = [];
-  for (let i = 0; i < count; i++) {
-    const date = addDays(first, i);
-    if (date > last) break;
-    let q = await db().query(
-      "SELECT date::text,data,version FROM shaz_meal_days WHERE user_id=$1 AND date=$2",
-      [user, date],
+  const end =
+    addDays(first, Math.max(0, count - 1)) < last
+      ? addDays(first, Math.max(0, count - 1))
+      : last;
+  const read = () =>
+    db().query(
+      "SELECT date::text,data,version FROM shaz_meal_days WHERE user_id=$1 AND date BETWEEN $2 AND $3 ORDER BY date",
+      [user, first, end],
     );
-    if (!q.rowCount) {
-      const day = makeMealDay(p.data, date, rs, undefined, rule);
-      const legacy = await db().query(
-        "SELECT * FROM shaz_meals WHERE user_id=$1 AND date=$2 ORDER BY slot",
-        [user, date],
-      );
-      if (legacy.rowCount)
-        for (
-          let j = 0;
-          j < Math.min(day.slots.length, legacy.rows.length);
-          j++
-        ) {
-          const old = legacy.rows[j],
-            r = old.recipe as Recipe;
-          day.slots[j].selected = portion(r, Number(old.servings));
-        }
-      await db().query(
-        "INSERT INTO shaz_meal_days(user_id,date,data) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-        [user, date, JSON.stringify(day)],
-      );
-      q = await db().query(
-        "SELECT date::text,data,version FROM shaz_meal_days WHERE user_id=$1 AND date=$2",
-        [user, date],
-      );
-    }
-    result.push({ ...q.rows[0], quality: mealQuality(q.rows[0].data) });
+  let existing = await read();
+  const dates = Array.from({ length: count }, (_, i) =>
+    addDays(first, i),
+  ).filter((d) => d <= last);
+  const missing = dates.filter(
+    (date) => !existing.rows.some((d) => d.date === date),
+  );
+  if (missing.length) {
+    const oldRows = await db().query(
+      "SELECT *,date::text FROM shaz_meals WHERE user_id=$1 AND date BETWEEN $2 AND $3 ORDER BY slot",
+      [user, first, end],
+    );
+    const days = missing.map((date) => {
+      const day = makeMealDay(p.data, date, rs, undefined, rule),
+        legacy = oldRows.rows.filter((d) => d.date === date);
+      for (let j = 0; j < Math.min(day.slots.length, legacy.length); j++)
+        day.slots[j].selected = portion(
+          legacy[j].recipe as Recipe,
+          Number(legacy[j].servings),
+        );
+      return { date, data: day };
+    });
+    await db().query(
+      "INSERT INTO shaz_meal_days(user_id,date,data) SELECT $1,date,data FROM jsonb_to_recordset($2::jsonb) AS item(date date,data jsonb) ON CONFLICT DO NOTHING",
+      [user, JSON.stringify(days)],
+    );
+    existing = await read();
   }
-  return result;
+  return existing.rows.map((d) => ({ ...d, quality: mealQuality(d.data) }));
 }
 export async function nutritionChange(
   user: string,

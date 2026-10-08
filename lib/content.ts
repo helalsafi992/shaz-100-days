@@ -47,11 +47,10 @@ export function seedContent() {
         },
       },
     ];
-    for (const e of entries)
-      await db().query(
-        "INSERT INTO shaz_content(kind,id,version,status,data) VALUES($1,$2,1,'review',$3) ON CONFLICT DO NOTHING",
-        [e.kind, e.id, JSON.stringify(e.data)],
-      );
+    await db().query(
+      "INSERT INTO shaz_content(kind,id,version,status,data) SELECT kind,id,1,'review',data FROM jsonb_to_recordset($1::jsonb) AS item(kind text,id text,data jsonb) ON CONFLICT DO NOTHING",
+      [JSON.stringify(entries)],
+    );
   })().catch((e) => {
     ready = undefined;
     throw e;

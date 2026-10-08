@@ -62,6 +62,14 @@ export async function body(req: Request) {
   }
 }
 export function failure(e: unknown) {
+  if (e instanceof Error && e.message === "MISSING_EXERCISE_VARIANT")
+    return Response.json(
+      {
+        error:
+          "Der findes ingen egnet øvelse til en af programmets bevægelsesfunktioner med dit udstyr og dine fravalg. Gennemgå frivillige fravalg eller vælg andet udstyr. Begrænsninger tilsidesættes ikke automatisk.",
+      },
+      { status: 400 },
+    );
   if (e instanceof HttpError)
     return Response.json({ error: e.message }, { status: e.status });
   if (e && typeof e === "object" && "issues" in e)
