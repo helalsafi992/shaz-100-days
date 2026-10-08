@@ -289,6 +289,8 @@ export async function editMeal(
     action: string;
     recipe?: string;
     servings?: number;
+    portionPolicy?: string;
+    recipeVersion?: number;
     expectedVersion: number;
   },
 ) {
@@ -386,7 +388,40 @@ export async function editMeal(
             400,
             `Vælg mellem ${b.min} og ${b.max} portioner.`,
           );
-        const selected = portion(r, amount);
+        if (v.recipeVersion !== undefined && v.recipeVersion !== r.version)
+          throw new HttpError(
+            409,
+            "Opskriften er opdateret. Hent de aktuelle alternativer før du bekræfter.",
+          );
+        const stored =
+          v.action === "undo"
+            ? s.previous
+            : v.action === "choose"
+              ? s.options.find(
+                  (o) =>
+                    o.recipe.id === r.id &&
+                    o.servings === amount &&
+                    o.portionPolicy === v.portionPolicy,
+                )
+              : null;
+        if (
+          stored &&
+          (stored.recipe.version !== r.version ||
+            !suitable(
+              stored.recipe,
+              p.data.diet,
+              p.data.avoid,
+              p.data.cookTime,
+              p.data.halal,
+            ))
+        )
+          throw new HttpError(
+            409,
+            "Det tidligere valg er ændret eller passer ikke længere. Vælg en ny ret.",
+          );
+        // Reuse the exact previewed/removed snapshot across algorithm releases.
+        // Portion edits and new library options use the current cooking increments.
+        const selected = stored ? structuredClone(stored) : portion(r, amount);
         if (selected.grams > b.maxGrams)
           throw new HttpError(
             400,

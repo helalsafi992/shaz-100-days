@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T23:33:33.271Z",
+  "at": "2026-10-08T23:54:25.161Z",
   "database": "Isolated PGlite PostgreSQL via wire protocol",
   "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
   "email": "Encrypted local mail capture; no actual mailbox delivery",
@@ -89,6 +89,10 @@
       "status": "passed"
     },
     {
+      "name": "M08/M09: legacy meal snapshots survive remove/undo and old alternatives after rounding upgrade",
+      "status": "passed"
+    },
+    {
       "name": "Mobile and desktop browser routes, real authenticated UI, no horizontal overflow or client exceptions",
       "status": "passed"
     },
@@ -130,6 +134,10 @@
     },
     {
       "name": "M08/M10: batch preview, atomic linked portions, cooking-date shopping, history locks and cross-user denial",
+      "status": "passed"
+    },
+    {
+      "name": "O01: database connection outage fails closed; signed webhook retry recovers exactly once",
       "status": "passed"
     }
   ]

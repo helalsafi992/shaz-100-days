@@ -43,3 +43,19 @@ Migration 009 er additiv. Ingen tabeller eller kundedata slettes ved deployment.
 Testappens region er `europe-west4-drams3a`, mens testdatabasen er `us-west2`. Der er ikke foretaget flytning af database eller video-volumes. Railway HTTP-proxy viste under f2da-kontrollen blandt andet ca. 2,0 sekunder for platform-state og 5,3 sekunder for den serverrenderede madside; dette er ikke en Core Web Vitals-måling. Pauseleverancen samler flere uafhængige dashboardlæsninger parallelt. En egentlig flytning kræver en konkret migrations-/backupplan; målet om produktionsperformance er ikke dokumenteret bestået.
 
 Se `MASTER-ACCEPTANCE.md` for alle 41 krav med faktisk status og `master-test-results.json` for den fulde lokale kørsel. Ikke alle 41 er bestået. Stripe-testkøb, faktisk mailmodtagelse, faglig/juridisk godkendelse, fuld enhedstest og de dokumenterede udviklingshuller mangler fortsat.
+
+## Pauseleverance verificeret
+
+Commit `8f038c68bdf62a3ddd48ed7f235ac8b4dc1c1527`:
+
+- Produktion `eaafa2c5-e620-4dc2-905b-79a6bcd1a4b1`: SUCCESS; offentlig health HTTP 200 med commit.
+- Test `1aea7bc6-376b-432c-8c53-fb4bded6ab08`: SUCCESS; health 200, frisk password-login 200, kundestate 200, 100 dage og pausepreview 200. Den efterfølgende logout lykkedes.
+- Faktisk indlogget Railway-browser viste pause 9.–12. oktober med to styrkepas, ingen cardio og uændret slutdato 15. januar 2027. Preview blev annulleret uden at ændre ejerprofilen. Screenshot: `deployed-desktop-pause-preview-8f038c6.jpg`.
+
+## Portioner og fejltolerance
+
+- 20 domænetestgrupper og 34 integrationstestgrupper består, inklusive 9.801 måltidskombinationer efter praktisk ingrediensafrunding.
+- Gamle måltids-snapshots bevares ved fjern/fortryd og valg af allerede gemte alternativer. Nye portionsændringer bruger `practical-grams-v1` med beregnede totaler.
+- Offline træningskladde overlever lukning, refresh, genforbindelse og øvelsesbytte. Et forsinket svar fra en lukket editor kan ikke overskrive en nyere lokal ændring.
+- Lokal databaseforbindelse blev faktisk afbrudt og genetableret. Appen returnerede 503 på health og 500 på signeret webhook under fejlen; samme webhook kunne genbehandles to gange med én lagret hændelse og én korrekt ordreændring. Kundens øvrige data var bevaret. Dette er lokal fejlindsprøjtning, ikke en afbrydelse af Railway-databasen.
+- Den nye leverances Railway-commit og deploy-status skal verificeres efter udrulningen; ovenstående versionsnumre gælder tidligere verificerede deployments.

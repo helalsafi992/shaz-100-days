@@ -194,6 +194,8 @@ export async function POST(
             ]),
             recipe: z.string().max(100).optional(),
             servings: z.number().min(0.1).max(3).optional(),
+            portionPolicy: z.literal("practical-grams-v1").optional(),
+            recipeVersion: z.number().int().min(1).optional(),
             expectedVersion: z.number().int().min(1),
           })
           .parse(input),

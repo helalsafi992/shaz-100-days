@@ -5,8 +5,8 @@ Denne rapport erstatter ikke masterkravene. Status er **ikke samlet 41/41 bestå
 ## Reproducerbar evidens
 
 - `npm run typecheck`, `npm test`, `npm run build`, `npm run test:integration`.
-- `tests/domain.test.ts`, `tests/master.test.ts`, `tests/activity.test.ts`: 19 testgrupper; herunder 9.801 måltidskombinationer, indkøbsgrupper og batchallokering.
-- `scripts/integration.mts`: 32 beståede grupper, isoleret PostgreSQL/PGlite, almindelig Better Auth, serverejerskab, signerede betalingsfixtures, samtidige ændringer, fysisk database-snapshot/restore, appgenstart og Chromium-browser.
+- `tests/domain.test.ts`, `tests/master.test.ts`, `tests/activity.test.ts`: 20 testgrupper; herunder 9.801 måltidskombinationer, indkøbsgrupper og batchallokering.
+- `scripts/integration.mts`: 34 beståede grupper, isoleret PostgreSQL/PGlite, almindelig Better Auth, serverejerskab, signerede betalingsfixtures, samtidige ændringer, fysisk database-snapshot/restore, appgenstart og Chromium-browser.
 - Browserbredder: 320, 390, 430, 768 og 1440 CSS-px. Mobil er emuleret Chromium, ikke fysisk Safari/Android.
 - `docs/master-test-results.json`: tidsstemplet maskinresultat fra seneste fulde kørsel.
 - Railway-commit og deployet browserkontrol dokumenteres særskilt i `docs/MASTER-DEPLOYMENT.md`.
@@ -46,8 +46,8 @@ Denne rapport erstatter ikke masterkravene. Status er **ikke samlet 41/41 bestå
 | M05 | eksplicit byttebekræftelse, browser | Lokalt testet: valg B efterfulgt af Escape må ikke ændre gemte måltider. GET opretter ikke madplaner. |
 | M06 | låste slots, versionsbundet ernæringspreview | Lokalt bestået: spiste snapshots bevares; stale preview giver konflikt. |
 | M07 | separate labels i `FoodPlanner` | Implementeret: planlagt/minimum/spist er adskilt; planlagt protein over minimum er ikke fejl. Numerisk specifik 160/102/0-browserfixture mangler. |
-| M08 | `householdSize`, `mealShopping`, `mealBatch`, mastertest | Delvis: to personer fordobler indkøb, ikke personlig energi. To sammenkædede måltider tilberedes én gang og indkøbes på madlavningsdatoen. Preview er versionsbundet, spist historik låses; fremtidige rester kan frigøres uden at omskrive historik. Browser på 390 px har gennemført preview, bekræftelse, refresh og efterfølgende indkøb. Ingrediensspecifik afrunding mangler. |
-| M09 | opskriftsfiltre/portionsgrænser | Delvis: utilstrækkelige muligheder og totalafvigelse vises; ingen dubletter/allergibrud. Ingrediensspecifikke portions- og stykgrænser mangler gennemgang. |
+| M08 | `householdSize`, `mealShopping`, `mealBatch`, mastertest | Delvis: to personer fordobler indkøb, ikke personlig energi. To sammenkædede måltider tilberedes én gang og indkøbes på madlavningsdatoen. Preview er versionsbundet, spist historik låses; fremtidige rester kan frigøres uden at omskrive historik. Browser på 390 px har gennemført preview, bekræftelse, refresh og efterfølgende indkøb. Nye portioner bruger dokumenterede 1/5/50 g-trin, og næringsværdier beregnes fra de afrundede ingredienser. Gamle gemte alternativer og fortrydelse bevarer deres snapshots. |
+| M09 | opskriftsfiltre/portionsgrænser | Delvis: utilstrækkelige muligheder og totalafvigelse vises; ingen dubletter/allergibrud. Ingrediensspecifik afrunding og opskriftsgrænser er implementeret og testet; faglig gennemgang af disse grænser mangler. |
 | M10 | indkøbsinterval, varegrupper og `checked_grams` | Implementeret: 1–14 dage, grupperede varer og øget behov ophæver visuel afkrydsning. Gram/kg omregnes præcist, ikke via antagede styk-/ml-vægte. Mobilbrowser: afkrydsning gemmes efter refresh; skift fra 7 til 14 dage viser øget behov uden forkert afkrydsning. |
 | S01 | fingerprint + række-/profilversion | Lokalt bestået: to samtidige bekræftelser giver 200 og 409; ændret input afviser gammelt preview. |
 | S02 | appgenstart + databasepersistens | Lokalt bestået: konti, sessions, planer, ordrer og logs bevares. Deploymentkontrol rapporteres særskilt. |
@@ -57,11 +57,11 @@ Denne rapport erstatter ikke masterkravene. Status er **ikke samlet 41/41 bestå
 | U01 | fem Chromium-bredder | Delvis: ingen sideoverflow/clientfejl i de afprøvede ruter. 200 % zoom og alle soft-keyboardtilfælde ikke fuldt afprøvet. |
 | U02 | `DialogAccessibility`, browser | Delvis: fokus, Tab og Escape afprøvet; ingen fuld skærmlæser-/WCAG AA-audit. |
 | U03 | fysisk iPhone og Android | Blokeret: ingen fysiske enheder stillet til rådighed. Emulering erstatter ikke testen. |
-| O01 | mailworker, webhookidempotens, leveringsstatus | Delvis: fixture-genforsøg/webhooks afprøvet. Rigtig udbyderfejl, alarmering og samlet DB-outageøvelse mangler. |
+| O01 | mailworker, webhookidempotens, leveringsstatus | Lokalt testet: databaseforbindelsen afbrydes; health giver 503 og signeret webhook 500. Efter genforbindelse lykkes samme hændelse præcis én gang; andre kundedata er uændrede. Mailfejl og genforsøg er fixture-testet. Rigtig udbyderfejl, alarmering og Railway-outageøvelse mangler. |
 | O02 | faktisk isoleret PostgreSQL-snapshot/restore | Lokalt bestået: ordre/adgang/profil/plan/log sammenlignes. Produktionsbackup, RPO/RTO og Railway-restore er ikke verificeret. |
 
 ## Kendte implementeringshuller
 
-Ingrediensspecifikke portioneringsregler, komplet mikronærings-/ugevariationskontrol og alle før/efter-skærmbilleder er ikke færdige. Disse er udviklingsopgaver, ikke noget der skyldes manglende Stripe-nøgler. Batch/rester er implementeret til madlavning og næste dag, ikke automatisk optimeret meal-prep for hele uger.
+Komplet mikronærings-/ugevariationskontrol og alle før/efter-skærmbilleder er ikke færdige. Praktiske portioneringsregler er implementeret, men afventer faglig gennemgang. Disse er udviklingsopgaver, ikke noget der skyldes manglende Stripe-nøgler. Batch/rester er implementeret til madlavning og næste dag, ikke automatisk optimeret meal-prep for hele uger.
 
 Opskriftsillustrationerne er ikke færdige opskriftsfotos. Egne Shaz-videoer og brugsberettiget fotoindhold mangler. Regler/skabeloner er versionerede og står i review, ikke fagligt godkendt. Der er ingen påstand om fuld ernæringsmæssig tilstrækkelighed.

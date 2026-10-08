@@ -1,4 +1,5 @@
 "use client";
+import { portionMeasure } from "@/lib/portion-policy";
 import { useEffect, useState, type ReactNode } from "react";
 import { ingredients, nutrients, suitable, type Recipe } from "@/lib/recipes";
 import {
@@ -1286,6 +1287,8 @@ export default function FoodPlanner({
                       meal(modal.slot, "choose", {
                         recipe: pendingChoice.recipe.id,
                         servings: pendingChoice.servings,
+                        portionPolicy: pendingChoice.portionPolicy,
+                        recipeVersion: pendingChoice.recipe.version,
                       })
                     }
                   >
@@ -1331,7 +1334,8 @@ export function RecipeDialog({
         />
         <h2>{r.name}</h2>
         <p>
-          {r.minutes} minutter · Dine valgte {option.servings} grundportioner
+          {r.minutes} minutter · Ca. {option.servings} grundportioner. Brug de
+          viste ingrediensmængder.
         </p>
         <div className="nutrition-strip">
           <span>
@@ -1357,7 +1361,12 @@ export function RecipeDialog({
                 {f.name}
                 <small>{f.basis}</small>
               </span>
-              <b>{i.grams} g</b>
+              <b>
+                {i.grams} g{" "}
+                {portionMeasure(i.id, i.grams) && (
+                  <small>{portionMeasure(i.id, i.grams)}</small>
+                )}
+              </b>
             </div>
           );
         })}

@@ -684,6 +684,30 @@ try {
         status: "passed",
       });
       await admin(users[2].headers, true);
+      for (const [kind, id] of [
+        ["exercise", "barbell-squat"],
+        ["template", "both-experienced-0"],
+      ]) {
+        const item = (
+          await db().query(
+            "SELECT * FROM shaz_content WHERE kind=$1 AND id=$2 ORDER BY version DESC LIMIT 1",
+            [kind, id],
+          )
+        ).rows[0];
+        assert.ok(item);
+        const edit = await post(
+          "admin/content",
+          {
+            kind,
+            id,
+            expectedVersion: item.version,
+            status: "review",
+            data: item.data,
+          },
+          users[2].headers,
+        );
+        assert.equal(edit.status, 200, JSON.stringify(edit.data));
+      }
       const content = (
         await db().query(
           "SELECT * FROM shaz_content WHERE kind='focus' AND id='1' ORDER BY version DESC LIMIT 1",
@@ -1771,6 +1795,106 @@ try {
       assert.equal(invalid.status, 400);
     },
   );
+  await check(
+    "M08/M09: legacy meal snapshots survive remove/undo and old alternatives after rounding upgrade",
+    async () => {
+      const h = new Headers({
+        origin: env.APP_URL,
+        "Content-Type": "application/json",
+      });
+      const login = await auth().api.signInEmail({
+        body: { email: pauseFixture.email, password: pauseFixture.password },
+        asResponse: true,
+      });
+      applyAuthCookies(h, login);
+      const id = pauseFixture.id,
+        rows = await mealDays(id, today, 1),
+        row = rows[0],
+        old = structuredClone(row.data),
+        slot = old.slots[0];
+      delete slot.selected.portionPolicy;
+      slot.selected.recipe.ingredients[0].grams += 2;
+      slot.selected.totals = (await import("../lib/recipes")).nutrients(
+        slot.selected.recipe,
+      );
+      slot.options[0] = structuredClone(slot.selected);
+      await db().query(
+        "UPDATE shaz_meal_days SET data=$3 WHERE user_id=$1 AND date=$2",
+        [id, today, JSON.stringify(old)],
+      );
+      const before = structuredClone(slot.selected);
+      let version = row.version;
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date: today,
+              slot: slot.id,
+              action: "remove",
+              expectedVersion: version++,
+            },
+            h,
+          )
+        ).status,
+        200,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date: today,
+              slot: slot.id,
+              action: "undo",
+              expectedVersion: version++,
+            },
+            h,
+          )
+        ).status,
+        200,
+      );
+      assert.deepEqual(
+        (await mealDays(id, today, 1, false))[0].data.slots[0].selected,
+        before,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date: today,
+              slot: slot.id,
+              action: "choose",
+              recipe: before.recipe.id,
+              servings: before.servings,
+              expectedVersion: version++,
+            },
+            h,
+          )
+        ).status,
+        200,
+      );
+      assert.deepEqual(
+        (await mealDays(id, today, 1, false))[0].data.slots[0].selected,
+        before,
+      );
+      const stale = await planpost(
+        "meal",
+        {
+          date: today,
+          slot: slot.id,
+          action: "choose",
+          recipe: before.recipe.id,
+          servings: before.servings,
+          recipeVersion: 999,
+          expectedVersion: version,
+        },
+        h,
+      );
+      assert.equal(stale.status, 409);
+    },
+  );
   // Browser is started in this process tree so it shares the isolated test network.
   const { chromium: pw } = await import("playwright-core");
 
@@ -2204,6 +2328,13 @@ try {
       await page.reload();
       await page.getByRole("button", { name: "Start træning →" }).click();
       await page.getByLabel(label!, { exact: true }).waitFor();
+      await page.waitForFunction(
+        (label) =>
+          document.querySelector<HTMLInputElement>(
+            `input[aria-label="${label}"]`,
+          )?.value === "13",
+        label,
+      );
       assert.equal(
         await page.getByLabel(label!, { exact: true }).inputValue(),
         "13",
@@ -2627,6 +2758,66 @@ try {
       assert.deepEqual(released[0].data, historical[0].data);
       assert.equal(released[1].data.slots[0].selected, null);
       assert.equal(released[1].data.target, historical[1].data.target);
+    },
+  );
+  await check(
+    "O01: database connection outage fails closed; signed webhook retry recovers exactly once",
+    async () => {
+      const before = await snapshot(pauseFixture.id);
+      const payload = JSON.stringify({
+        id: "evt_db_outage_fixture",
+        type: "charge.refunded",
+        livemode: false,
+        data: {
+          object: { payment_intent: "pi_fixture_0", amount_refunded: 39900 },
+        },
+      });
+      const signature = new Stripe(
+        env.STRIPE_SECRET_KEY,
+      ).webhooks.generateTestHeaderString({
+        payload,
+        secret: env.STRIPE_WEBHOOK_SECRET,
+      });
+      const deliver = () =>
+        fetch(env.APP_URL + "/api/stripe/webhook", {
+          method: "POST",
+          headers: { "stripe-signature": signature },
+          body: payload,
+        });
+      await socket.stop();
+      try {
+        assert.equal((await fetch(env.APP_URL + "/api/health")).status, 503);
+        assert.equal(
+          (await deliver()).status,
+          500,
+          "Failed persistence must not acknowledge a payment event",
+        );
+      } finally {
+        await socket.start();
+      }
+      assert.equal((await fetch(env.APP_URL + "/api/health")).status, 200);
+      assert.equal((await deliver()).status, 200);
+      assert.equal((await deliver()).status, 200);
+      assert.equal(
+        (
+          await db().query(
+            "SELECT count(*)::int n FROM shaz_events WHERE id='evt_db_outage_fixture'",
+          )
+        ).rows[0].n,
+        1,
+      );
+      const order = (
+        await db().query(
+          "SELECT status,refunded_amount FROM shaz_orders WHERE payment_id='pi_fixture_0'",
+        )
+      ).rows[0];
+      assert.equal(order.status, "refunded");
+      assert.equal(order.refunded_amount, 39900);
+      assert.deepEqual(
+        await snapshot(pauseFixture.id),
+        before,
+        "Unrelated customer data survives database reconnect",
+      );
     },
   );
   await browser.close();

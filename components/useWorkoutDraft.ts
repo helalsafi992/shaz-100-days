@@ -33,15 +33,21 @@ export function useWorkoutDraft(
     inFlight = useRef<Promise<boolean> | null>(null),
     blocked = useRef(false),
     mounted = useRef(true),
+    editId = useRef(crypto.randomUUID()),
     key = "shaz-workout:" + user + ":" + id;
-  function cache(dirty: boolean) {
+  function cache(dirty: boolean, newEdit = false) {
     try {
+      const stored = JSON.parse(localStorage.getItem(key) || "null");
+      // A response from a closed editor must not overwrite a newer local edit.
+      if (!newEdit && stored?.editId && stored.editId !== editId.current)
+        return;
       localStorage.setItem(
         key,
         JSON.stringify({
           ...latest.current,
           revision: revision.current,
           dirty,
+          editId: editId.current,
           updatedAt: Date.now(),
         }),
       );
@@ -91,9 +97,11 @@ export function useWorkoutDraft(
         cache(true);
         if (mounted.current)
           setStatus(
-            !navigator.onLine ? "Offline — gemt på denne enhed" : e instanceof Error
-              ? e.message
-              : "Gemmes lokalt. Prøver igen, når forbindelsen er tilbage.",
+            !navigator.onLine
+              ? "Offline — gemt på denne enhed"
+              : e instanceof Error
+                ? e.message
+                : "Gemmes lokalt. Prøver igen, når forbindelsen er tilbage.",
           );
         return false;
       } finally {
@@ -107,12 +115,19 @@ export function useWorkoutDraft(
     mounted.current = true;
     try {
       const local = JSON.parse(localStorage.getItem(key) || "null");
-      if (local?.dirty && Array.isArray(local.sets)) {
+      if (
+        Array.isArray(local?.sets) &&
+        (local.dirty || local.revision > revision.current)
+      ) {
+        editId.current = local.editId || editId.current;
         latest.current = { sets: local.sets, timerEnd: local.timerEnd || 0 };
         rawSet(local.sets);
         rawEnd(local.timerEnd || 0);
-        pending.current = true;
-        if (local.revision !== revision.current) {
+        pending.current = Boolean(local.dirty);
+        if (local.revision > revision.current)
+          revision.current = local.revision;
+        if (!local.dirty) setStatus("✓ Gemt på din konto");
+        if (local.dirty && local.revision < revision.current) {
           blocked.current = true;
           setConflict(true);
           setStatus(
@@ -150,14 +165,16 @@ export function useWorkoutDraft(
     latest.current = { ...latest.current, sets: value };
     rawSet(value);
     pending.current = true;
-    cache(true);
+    editId.current = crypto.randomUUID();
+    cache(true, true);
     setStatus("Gemmer kladde…");
   }
   function setEnd(value: number) {
     latest.current = { ...latest.current, timerEnd: value };
     rawEnd(value);
     pending.current = true;
-    cache(true);
+    editId.current = crypto.randomUUID();
+    cache(true, true);
     setStatus("Gemmer kladde…");
   }
   async function resolve(useLocal: boolean) {

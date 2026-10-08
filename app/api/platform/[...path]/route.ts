@@ -24,7 +24,13 @@ import {
   activePeriod,
   planningPeriod,
 } from "@/lib/platform";
-import { profileSchema, localDate, dayNumber, addDays } from "@/lib/profile";
+import {
+  equipmentValues,
+  profileSchema,
+  localDate,
+  dayNumber,
+  addDays,
+} from "@/lib/profile";
 import { alternatives, Exercise, DayPlan } from "@/lib/training";
 import { catalog, seedContent } from "@/lib/content";
 import { ingredients, suitable, Recipe } from "@/lib/recipes";
@@ -938,7 +944,13 @@ function validateContent(kind: string, data: unknown) {
         portionMax: z.number().min(1).max(2.5).optional(),
         maxGrams: z.number().min(250).max(1200).optional(),
         ingredients: z
-          .array(z.object({ id, grams: z.number().positive().max(3000) }))
+          .array(
+            z.object({
+              id,
+              grams: z.number().positive().max(3000),
+              stepGrams: z.number().int().min(1).max(50).optional(),
+            }),
+          )
           .min(1)
           .max(30),
         steps: z.array(z.string().min(5).max(1000)).min(2).max(15),
@@ -959,20 +971,18 @@ function validateContent(kind: string, data: unknown) {
         "core",
         "shoulder",
       ]),
-      equipment: z
-        .array(
-          z.enum(["bodyweight", "dumbbells", "band", "machines", "barbell"]),
-        )
-        .min(1),
+      equipment: z.array(z.enum(equipmentValues)).min(1),
       instructions: z.array(z.string().min(5).max(1000)).min(2),
       cue: z.string().max(1000),
       videoId: z.string().uuid().optional(),
+      unit: z.enum(["reps", "seconds"]).optional(),
+      perSide: z.boolean().optional(),
     }).parse(data);
   else if (kind === "template")
     z.object({
-      place: z.enum(["home", "gym"]),
-      level: z.enum(["beginner", "intermediate"]),
-      days: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+      place: z.enum(["home", "gym", "both"]),
+      level: z.enum(["beginner", "intermediate", "experienced"]),
+      days: z.number().int().min(0).max(4),
       sets: z.number().int().min(1).max(4),
       min: z.number().int().min(5).max(12),
       max: z.number().int().min(8).max(15),

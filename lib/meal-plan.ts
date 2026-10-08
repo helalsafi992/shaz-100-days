@@ -1,8 +1,10 @@
+import { practicalGrams, portionPolicyVersion } from "./portion-policy";
 import { ingredients, nutrients, suitable, type Recipe } from "./recipes";
 import type { Profile } from "./profile";
 import { estimate, nutritionRule, type NutritionPolicy } from "./nutrition";
 export type Totals = ReturnType<typeof nutrients>;
 export type MealOption = {
+  portionPolicy?: string;
   recipe: Recipe;
   servings: number;
   totals: Totals;
@@ -58,11 +60,16 @@ export function portion(recipe: Recipe, servings: number): MealOption {
     servings: 1,
     ingredients: recipe.ingredients.map((i) => ({
       id: i.id,
-      grams: Math.max(1, Math.round((i.grams / recipe.servings) * servings)),
+      grams: practicalGrams(
+        i.id,
+        (i.grams / recipe.servings) * servings,
+        i.stepGrams,
+      ),
     })),
   };
   return {
     recipe: scaled,
+    portionPolicy: portionPolicyVersion,
     servings: Math.round(servings * 100) / 100,
     totals: nutrients(scaled),
     grams: scaled.ingredients.reduce((n, i) => n + i.grams, 0),
@@ -76,14 +83,27 @@ export function portionBounds(r: Recipe) {
   };
 }
 export function optionFor(r: Recipe, target: number) {
-  const s = Math.round((target / nutrients(r).kcal) * 100) / 100,
+  const ratio = target / nutrients(r).kcal,
     b = portionBounds(r);
-  if (s < b.min || s > b.max) return null;
-  const o = portion(r, s);
-  return o.grams <= b.maxGrams &&
-    Math.abs(o.totals.kcal - target) <= target * 0.04
-    ? o
-    : null;
+  // Search nearby practical portions, always calculating from the rounded ingredients.
+  // Never alter energy values or scale only the label to make a target appear to fit.
+  let best: MealOption | null = null;
+  for (let n = -15; n <= 15; n++) {
+    const servings = Math.round((ratio + n / 100) * 100) / 100;
+    if (servings < b.min || servings > b.max) continue;
+    const o = portion(r, servings);
+    if (
+      o.grams > b.maxGrams ||
+      Math.abs(o.totals.kcal - target) > target * 0.04
+    )
+      continue;
+    if (
+      !best ||
+      Math.abs(o.totals.kcal - target) < Math.abs(best.totals.kcal - target)
+    )
+      best = o;
+  }
+  return best;
 }
 export function eligibleOptions(
   p: Profile,

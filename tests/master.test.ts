@@ -329,3 +329,32 @@ test("T06 pause/restart preserves completed history and day 100, reduces actual 
   assert.equal(calendar.label, "Planlagt pause");
   assert.equal(calendar.hasActivity, false);
 });
+
+test("M08/M09 practical ingredient increments keep exact nutrients, whole-egg reference and frozen snapshots", async () => {
+  const { portion, optionFor } = await import("../lib/meal-plan"),
+    { nutrients } = await import("../lib/recipes"),
+    { portionStep, portionMeasure } = await import("../lib/portion-policy");
+  const recipe = recipes.find((r) =>
+      r.ingredients.some((i) => i.id === "egg"),
+    )!,
+    before = JSON.stringify(recipe),
+    o = portion(recipe, 1.37);
+  for (const i of o.recipe.ingredients)
+    assert.equal(i.grams % portionStep(i.id), 0);
+  assert.deepEqual(o.totals, nutrients(o.recipe));
+  assert.equal(JSON.stringify(recipe), before);
+  assert.ok(portionMeasure("egg", 150)?.includes("3"));
+  assert.equal(portionMeasure("bread", 150), null);
+  assert.equal(optionFor(recipe, 20), null);
+  assert.equal(optionFor(recipe, 20000), null);
+  const snapshot = structuredClone(o);
+  portion(recipe, 2);
+  assert.deepEqual(snapshot, o);
+  const custom = {
+    ...recipe,
+    ingredients: recipe.ingredients.map((i) => ({ ...i, stepGrams: 10 })),
+  };
+  assert.ok(
+    portion(custom, 1.37).recipe.ingredients.every((i) => i.grams % 10 === 0),
+  );
+});

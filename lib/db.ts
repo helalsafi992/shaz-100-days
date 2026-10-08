@@ -6,12 +6,20 @@ const shared = globalThis as typeof globalThis & { shazPool?: Pool };
 let ready: Promise<void> | undefined;
 export function db() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_UNAVAILABLE");
-  return (shared.shazPool ??= new Pool({
+  if (shared.shazPool) return shared.shazPool;
+  const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: process.env.APP_ENV === "test" ? 1 : 8,
     connectionTimeoutMillis: 5000,
     statement_timeout: 15000,
-  }));
+  });
+  // pg emits on idle connection loss during a database restart. Handle it without
+  // crashing the app or logging a connection string, query or customer payload.
+  pool.on("error", () =>
+    console.error(JSON.stringify({ event: "database_connection_lost" })),
+  );
+  shared.shazPool = pool;
+  return pool;
 }
 export async function transaction<T>(
   fn: (c: PoolClient) => Promise<T>,

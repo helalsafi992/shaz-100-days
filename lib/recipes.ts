@@ -7,7 +7,7 @@ export type Recipe = {
   category: "breakfast" | "lunch" | "dinner" | "snack";
   minutes: number;
   servings: number;
-  ingredients: { id: string; grams: number }[];
+  ingredients: { id: string; grams: number; stepGrams?: number }[];
   steps: string[];
   version: number;
   portionMin?: number;

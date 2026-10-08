@@ -1,4 +1,6 @@
 "use client";
+import { portion } from "@/lib/meal-plan";
+import { portionMeasure } from "@/lib/portion-policy";
 import { useState, useEffect, useRef } from "react";
 import { activityForDate, activityCounts } from "@/lib/activity";
 import { useWorkoutDraft } from "./useWorkoutDraft";
@@ -381,12 +383,6 @@ export default function Portal({
                 Tilpas styrke, udstyr og ugerytme
               </a>
             </p>
-            <ScheduleBreaks
-              breaks={state.breaks || []}
-              today={state.today}
-              start={state.profile.start_date}
-              refresh={refreshState}
-            />
             <CardioPlanner
               profile={p}
               rows={state.cardio || []}
@@ -517,6 +513,12 @@ export default function Portal({
                 </details>
               ))}
             </div>
+            <ScheduleBreaks
+              breaks={state.breaks || []}
+              today={state.today}
+              start={state.profile.start_date}
+              refresh={refreshState}
+            />
             <p className="p-note">
               Belastningen øges ikke automatisk. Dine registrerede sæt og
               oplevede anstrengelse bruges til et forslag, du selv vurderer.
@@ -859,7 +861,7 @@ function FoodLibrary({
       )}
       <div className="recipe-grid">
         {list.map((r) => {
-          const n = nutrients(r);
+          const n = portion(r, 1).totals;
           return (
             <article className={"recipe-card " + r.category} key={r.id}>
               <div className="recipe-cover">
@@ -941,24 +943,26 @@ function FoodLibrary({
               />
             </label>
             <div className="recipe-nutrition">
-              {Object.entries(nutrients(recipe, portions)).map(([k, n]) => (
-                <div key={k}>
-                  <b>{Math.round(n)}</b>
-                  <span>
-                    {
-                      (
-                        {
-                          kcal: "kcal",
-                          protein: "g protein",
-                          carbs: "g kulhydrat*",
-                          fat: "g fedt",
-                          fiber: "g fibre",
-                        } as Record<string, string>
-                      )[k]
-                    }
-                  </span>
-                </div>
-              ))}
+              {Object.entries(portion(recipe, portions).totals).map(
+                ([k, n]) => (
+                  <div key={k}>
+                    <b>{Math.round(n)}</b>
+                    <span>
+                      {
+                        (
+                          {
+                            kcal: "kcal",
+                            protein: "g protein",
+                            carbs: "g kulhydrat*",
+                            fat: "g fedt",
+                            fiber: "g fibre",
+                          } as Record<string, string>
+                        )[k]
+                      }
+                    </span>
+                  </div>
+                ),
+              )}
             </div>
             <p className="p-note">
               Beregnede estimater for {portions} portion(er). *USDA angiver
@@ -966,7 +970,7 @@ function FoodLibrary({
               påvirker resultatet.
             </p>
             <h3>Ingredienser</h3>
-            {recipe.ingredients.map((i) => {
+            {portion(recipe, portions).recipe.ingredients.map((i) => {
               const f = ingredients.find((x) => x.id === i.id)!;
               return (
                 <div className="p-list-row" key={i.id}>
@@ -974,7 +978,12 @@ function FoodLibrary({
                     {f.name}
                     <small>{f.basis}</small>
                   </span>
-                  <b>{Math.round((i.grams / recipe.servings) * portions)} g</b>
+                  <b>
+                    {i.grams} g{" "}
+                    {portionMeasure(i.id, i.grams) && (
+                      <small>{portionMeasure(i.id, i.grams)}</small>
+                    )}
+                  </b>
                 </div>
               );
             })}
@@ -994,8 +1003,9 @@ function FoodLibrary({
               <summary>Datakilder og beregning</summary>
               <p>
                 USDA FoodData Central, SR Legacy, april 2018. Sum af gram ×
-                næringsværdi pr. 100 g / 100, divideret med grundopskriftens
-                portioner. Vand til tilberedning bidrager ikke med energi. Der
+                næringsværdi pr. 100 g / 100. Portionen skaleres først,
+                hvorefter de praktisk afrundede ingrediensmængder bruges til
+                beregningen. Vand til tilberedning bidrager ikke med energi. Der
                 beregnes ikke specifikke tilberedningstab.
               </p>
               {recipe.ingredients.map((i) => {
