@@ -29,6 +29,8 @@ export default async function Page({
       return (
         <Account
           email={s.user.email}
+          support={process.env.SUPPORT_EMAIL}
+          isAdmin={Boolean((await db().query("SELECT 1 FROM shaz_roles WHERE user_id=$1",[s.user.id])).rowCount)}
           test={Boolean(await testGrant(s.user.id))}
           orders={JSON.parse(JSON.stringify(orders.rows))}
         />

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { activityForDate, activityCounts } from "@/lib/activity";
 import { useWorkoutDraft } from "./useWorkoutDraft";
 import FoodPlanner, { FoodSummary } from "./FoodPlanner";
 import CardioPlanner, { type CardioRow } from "./CardioPlanner";
@@ -91,9 +92,15 @@ export default function Portal({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [selected, setSelected] = useState<Day | null>(null),
-    [weekStart, setWeekStart] = useState(initial.today);
+    [weekStart, setWeekStart] = useState(initial.today),
+    [cardioOpen, setCardioOpen] = useState<string | undefined>();
   const p = state.profile.data;
-  const complete = state.days.filter((d) => d.status === "completed");
+  const complete = state.days.filter(
+    (d) => d.plan.kind === "workout" && d.status === "completed",
+  );
+  const counts = activityCounts(state.days, state.cardio || []);
+  const calendar = (date: string) =>
+    activityForDate(date, state.days, state.cardio || []);
   const today = state.days.find((d) => d.scheduled_date === state.today);
   const cardioToday = (state.cardio || []).find(
     (c) =>
@@ -211,7 +218,7 @@ export default function Portal({
                 </span>
                 <h2>
                   {ended
-                    ? `${complete.length} gennemførte træninger.`
+                    ? `${counts.strength} styrkepas og ${counts.cardio} cardiopas.`
                     : today?.plan.kind !== "workout" && cardioToday
                       ? cardioToday.plan.selected.title
                       : today?.plan.title || "Gør plads til din nye rytme."}
@@ -235,6 +242,13 @@ export default function Portal({
                         ? "Se og ret registrering"
                         : "Start træning →"}
                     </button>
+                    {cardioToday && (
+                      <p>
+                        Dertil: {cardioToday.plan.selected.title} ·{" "}
+                        {cardioToday.plan.selected.minutes} min.{" "}
+                        <a href="/app/training#cardio">Se cardio →</a>
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
@@ -263,14 +277,14 @@ export default function Portal({
                 <span>GENNEMFØRT</span>
                 <b>
                   {complete.length}
-                  <small>træninger</small>
+                  <small>styrkepas · {counts.cardio} cardiopas</small>
                 </b>
               </div>
               <div>
                 <span>DIN RYTME</span>
                 <b>
                   {p.days}
-                  <small>dage om ugen</small>
+                  <small>styrkepas / uge · {p.cardio?.days || 0} cardio</small>
                 </b>
               </div>
               <div>
@@ -292,50 +306,19 @@ export default function Portal({
                   .slice(0, 7)
                   .map((d) => (
                     <button
-                      disabled={
-                        d.plan.kind !== "workout" &&
-                        !(state.cardio || []).some(
-                          (c) =>
-                            c.scheduled_date === d.scheduled_date &&
-                            c.status !== "removed",
-                        )
+                      key={d.id}
+                      disabled={!calendar(d.scheduled_date).hasActivity}
+                      className={
+                        calendar(d.scheduled_date).hasActivity ? "training" : ""
                       }
                       onClick={() =>
                         d.plan.kind === "workout"
                           ? setSelected(d)
                           : location.assign("/app/training#cardio")
                       }
-                      key={d.id}
-                      className={
-                        d.status === "completed"
-                          ? "done"
-                          : d.plan.kind === "workout"
-                            ? "training"
-                            : ""
-                      }
                     >
                       <span>{fmt(d.scheduled_date)}</span>
-                      <b>
-                        {d.status === "completed"
-                          ? "✓"
-                          : d.plan.kind === "workout"
-                            ? (state.cardio || []).some(
-                                (c) =>
-                                  c.scheduled_date === d.scheduled_date &&
-                                  c.status !== "removed",
-                              )
-                              ? "Styrke + let cardio"
-                              : "Træning"
-                            : d.plan.kind === "finish"
-                              ? "Status"
-                              : (state.cardio || []).some(
-                                    (c) =>
-                                      c.scheduled_date === d.scheduled_date &&
-                                      c.status !== "removed",
-                                  )
-                                ? "Cardio"
-                                : "Hvile"}
-                      </b>
+                      <b>{calendar(d.scheduled_date).label}</b>
                       <small>Dag {d.day}</small>
                     </button>
                   ))}
@@ -366,6 +349,9 @@ export default function Portal({
               rows={state.cardio || []}
               today={state.today}
               refresh={refreshState}
+              openId={cardioOpen}
+              clearOpen={() => setCardioOpen(undefined)}
+              showList={false}
             />
             <div className="training-weeks">
               {Array.from({ length: 15 }, (_, i) => i + 1).map((week) => (
@@ -385,35 +371,79 @@ export default function Portal({
                   {state.days
                     .filter((d) => d.plan.week === week)
                     .map((d) => (
-                      <div className="training-day" key={d.id}>
-                        <span>
-                          {fmt(d.scheduled_date)}
-                          <small>Dag {d.day}</small>
-                        </span>
-                        <div>
-                          <b>{d.plan.title}</b>
-                          <small>
-                            {d.plan.kind === "workout"
-                              ? `${d.plan.minutes} min. · ${d.plan.exercises.length} øvelser`
-                              : "Restitution og gode vaner"}
-                          </small>
+                      <div key={d.id} className="calendar-day">
+                        <div className="calendar-date">
+                          <b>{fmt(d.scheduled_date)}</b>
+                          <span>
+                            Dag {d.day} · {calendar(d.scheduled_date).label}
+                          </span>
                         </div>
-                        <span className={"status " + d.status}>
-                          {d.status === "completed"
-                            ? "Gennemført"
-                            : d.status === "skipped"
-                              ? "Sprunget over"
-                              : d.plan.kind === "workout"
-                                ? "Planlagt"
-                                : "Hvile"}
-                        </span>
                         {d.plan.kind === "workout" && (
-                          <button
-                            className="p-secondary"
-                            onClick={() => setSelected(d)}
-                          >
-                            Se pas
-                          </button>
+                          <div className="training-day">
+                            <span>STYRKE</span>
+                            <div>
+                              <b>{d.plan.title}</b>
+                              <small>
+                                {d.plan.minutes} min. ·{" "}
+                                {d.plan.exercises.length} øvelser
+                              </small>
+                            </div>
+                            <span className={"status " + d.status}>
+                              {d.status === "completed"
+                                ? "✓ Gennemført"
+                                : d.status === "skipped"
+                                  ? "Sprunget over"
+                                  : "Planlagt"}
+                            </span>
+                            <button
+                              className="p-secondary"
+                              onClick={() => setSelected(d)}
+                            >
+                              {d.status === "completed"
+                                ? "Se registrering"
+                                : "Se pas"}
+                            </button>
+                          </div>
+                        )}
+                        {(state.cardio || [])
+                          .filter(
+                            (c) =>
+                              c.scheduled_date === d.scheduled_date &&
+                              c.status !== "removed",
+                          )
+                          .map((c) => (
+                            <div className="training-day" key={c.id}>
+                              <span>CARDIO</span>
+                              <div>
+                                <b>{c.plan.selected.title}</b>
+                                <small>
+                                  {c.plan.selected.minutes} min. ·{" "}
+                                  {c.plan.selected.intensity}
+                                </small>
+                              </div>
+                              <span className={"status " + c.status}>
+                                {c.status === "completed"
+                                  ? "✓ Gennemført"
+                                  : c.status === "skipped"
+                                    ? "Sprunget over"
+                                    : "Planlagt"}
+                              </span>
+                              <button
+                                className="p-secondary"
+                                onClick={() => setCardioOpen(c.id)}
+                              >
+                                {c.status === "completed"
+                                  ? "Se cardioregistrering"
+                                  : "Se cardio"}
+                              </button>
+                            </div>
+                          ))}
+                        {!calendar(d.scheduled_date).hasActivity && (
+                          <p className="p-note">
+                            {d.plan.kind === "finish"
+                              ? "Dag 100 · Afslutning og dine næste skridt."
+                              : "Restitution. Missede pas flyttes ikke automatisk til i morgen."}
+                          </p>
                         )}
                       </div>
                     ))}
@@ -454,7 +484,7 @@ export default function Portal({
                 <span>GENNEMFØRT</span>
                 <b>
                   {complete.length}
-                  <small>træninger</small>
+                  <small>styrkepas · {counts.cardio} cardiopas</small>
                 </b>
               </div>
               <div>

@@ -1,6 +1,6 @@
 # Verificeret testleverance — 8. oktober 2026
 
-10 domænegrupper og 23 integrationsgrupper består. `npm run typecheck`, `npm test`, `npm run build` og `npm run test:integration` er kørt. Maskinlæsbare resultater: [integrated-test-results.json](integrated-test-results.json).
+11 domænegrupper og 24 integrationsgrupper består. `npm run typecheck`, `npm test`, `npm run build` og `npm run test:integration` er kørt. Maskinlæsbare resultater: [integrated-test-results.json](integrated-test-results.json).
 
 | Accepttest | Resultat og konkret afprøvning |
 | --- | --- |
@@ -22,7 +22,7 @@ Derudover: password-signup/e-mailbekræftelse/reset og tilbagekaldte sessioner; 
 
 ## Afgrænsning
 
-Browserbilleder er fra den faktisk indloggede, lokalt kørte production-build med fiktive konti. Railway har separat almindelig passwordtest og konkret deploymentskontrol. De to testmiljøer forveksles ikke. Testbetalinger og mails er signerede/opsamlede fixtures, ikke faktisk StripeCheckout eller inboxlevering. Lokal backuprestore er ikke Railway-produktionsrestore. Faglige regler er endnu review; alle mikronæringsstoffer er ikke valideret. Se [LAUNCH.md](LAUNCH.md) og [NUTRITION-POLICY.md](NUTRITION-POLICY.md).
+Automatiske mobilbilleder kommer fra en lokalt kørt production-build med fiktive konti. Supplerende cloud-browserbilleder kommer fra faktisk almindeligt password-login på Railway-staging. De to testmiljøer er angivet særskilt. Testbetalinger og mails er signerede/opsamlede fixtures, ikke faktisk StripeCheckout eller inboxlevering. Lokal backuprestore er ikke Railway-produktionsrestore. Faglige regler er endnu review; alle mikronæringsstoffer er ikke valideret. Se [LAUNCH.md](LAUNCH.md) og [NUTRITION-POLICY.md](NUTRITION-POLICY.md).
 
 Reproducer: `npm ci && npm run typecheck && npm test && npm run build && npm run test:integration`. Scriptet opretter sin egen database og fiktive konti; ingen Railway-kundedata ændres.
 
@@ -31,3 +31,12 @@ Reproducer: `npm ci && npm run typecheck && npm test && npm run build && npm run
 [railway-verification.json](railway-verification.json) dokumenterer den konkrete deployede featureversion: ordinary password-login, anonym afvisning,100dage/38opskrifter, alle beskyttede siderHTTP200, allefire2400kcal-eksempler, mindreårig afvist, logout401og identiske madplaner efter nyt login. Testprofilens faktiske mål2635kcal blev bevaret ved2–6måltider; planerne beregnede2628–2638kcal med tre muligheder pr.plads. Profilen blev ikke ændret.
 
 En efterfølgende performanceændring samler katalogseed og ugens madplan i få databasekald; de23integrationsgrupper er kørt igen og består. Den ændrer ikke opskrifter, kalorier eller gemte valg.
+
+
+## Samlet kundeoplevelse – supplerende test
+- Almindeligt e-mail/password-login er manuelt verificeret i den offentligt deployede Railway-stagingbrowser, inklusive synligt personligt dashboard og madplan. Screenshot fra faktisk cloud-browser er afleveret særskilt.
+- Den deployede madplan er byttet fra Kikærtegryde (661 kcal) til Kikærtesalat (662 kcal); dagens beregnede total ændrede sig fra 2638 til 2639 kcal og protein fra 160 til 157 g. Målet forblev 2635 kcal.
+- Nye isolerede betalingskontrakttests beviser genbrug efter tvetydig netværksfejl, genoptagelse af samme session, serverejerskab, afvisning af forfalsket konto-ID, ændret billing-email uden overdragelse og webhook-idempotens. Der er ikke foretaget et rigtigt Stripe-testkøb.
+- Samlet kalender klassificerer en dag med cardio som cardio, ikke ren hvile, og tæller gennemført styrke/cardio særskilt.
+- Aktivering kræver nu en udtrykkelig startbekræftelse.
+- Cloud-browseren er verificeret på desktop. De automatiske 390×844-touchtests er på den lokale identiske production-build, ikke en fysisk telefon.

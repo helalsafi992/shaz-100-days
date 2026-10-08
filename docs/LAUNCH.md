@@ -1,6 +1,6 @@
 # Produktionskrav før lancering
 
-**Status: salg lukket.** Der må ikke åbnes rigtige betalinger eller sendes en lanceringskampagne uden ejerens udtrykkelige godkendelse. Den gamle beta er fjernet fra kunderejsen. `/demo` viderestiller til `/preview`. Den fulde testplatform findes på separat staging; se INTEGRATED-PLATFORM.md.
+**Status: salg lukket.** Der må ikke åbnes rigtige betalinger eller sendes en lanceringskampagne uden ejerens udtrykkelige godkendelse. Den gamle beta er fjernet fra kunderejsen. `/demo` og `/preview` viderestiller direkte til `/`. Samme kode og kundeområde bruges i staging og produktion med separate databaser. Offentlige købsknapper er deaktiveret, indtil salg faktisk fungerer.
 
 ## Miljøvariabler
 

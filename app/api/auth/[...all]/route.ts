@@ -44,7 +44,7 @@ export async function POST(req: Request) {
           : "Kontooprettelse og e-mail er ved at blive gjort klar.",
       );
     const response = await auth().handler(req);
-    if (endpoint === "sign-up/email" && response.ok && !isolatedTest()) {
+    if (endpoint === "sign-up/email" && response.ok) {
       const data = await response.clone().json();
       if (data.user?.email)
         await auth().api.sendVerificationEmail({

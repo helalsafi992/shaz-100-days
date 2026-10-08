@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T17:33:53.245Z",
+  "at": "2026-10-08T18:57:24.577Z",
   "database": "Isolated PGlite PostgreSQL via wire protocol",
   "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
   "email": "Encrypted local mail capture; no actual mailbox delivery",
@@ -54,6 +54,10 @@
     },
     {
       "name": "Workout drafts: server revisions, cross-user protection and sets retained through exercise swap",
+      "status": "passed"
+    },
+    {
+      "name": "Bound checkout retries, resumption, amount, ownership, verification and webhook idempotency",
       "status": "passed"
     },
     {

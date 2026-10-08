@@ -52,7 +52,11 @@ function receiptSnapshot() {
     support: process.env.SUPPORT_EMAIL,
   };
 }
-export async function createCheckout(email: string) {
+export async function createCheckout(
+  account: { id: string; email: string },
+  client = stripe(),
+) {
+  const email = account.email.toLowerCase();
   if (!salesOpen())
     throw new HttpError(
       503,
@@ -70,7 +74,7 @@ export async function createCheckout(email: string) {
     (counts.focus || 0) < 15
   )
     throw new HttpError(503, "Indholdet afventer afsluttende gennemgang.");
-  const price = await stripe().prices.retrieve(process.env.STRIPE_PRICE_ID!);
+  const price = await client.prices.retrieve(process.env.STRIPE_PRICE_ID!);
   if (
     price.unit_amount !== 39900 ||
     price.currency !== "dkk" ||
@@ -80,22 +84,74 @@ export async function createCheckout(email: string) {
     price.tax_behavior === "exclusive"
   )
     throw new Error("PRICE_MISMATCH");
-  const id = crypto.randomUUID(),
-    token = opaque();
-  await db().query(
-    "INSERT INTO shaz_checkout(id,token_hash,terms_version,receipt) VALUES($1,$2,$3,$4)",
-    [id, hash(token), TERMS_VERSION, JSON.stringify(receiptSnapshot())],
-  );
-  const s = await stripe().checkout.sessions.create(
+  // Serialize attempt selection, commit the key BEFORE Stripe is called. Concurrent
+  // clicks and ambiguous network retries therefore reuse the same Stripe request.
+  const attempt = await transaction(async (c) => {
+    await c.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+      "checkout:" + account.id,
+    ]);
+    const paid = await c.query(
+      "SELECT 1 FROM shaz_orders WHERE user_id=$1 AND status='paid' AND livemode=$2",
+      [account.id, liveMode()],
+    );
+    if (paid.rowCount)
+      throw new HttpError(409, "Du har allerede adgang. Åbn Mit forløb.");
+    const existing = await c.query(
+      "SELECT * FROM shaz_checkout WHERE user_id=$1 AND state='active'",
+      [account.id],
+    );
+    if (existing.rowCount) return existing.rows[0];
+    const id = crypto.randomUUID();
+    const r = await c.query(
+      "INSERT INTO shaz_checkout(id,token_hash,user_id,email,state,terms_version,receipt) VALUES($1,$2,$3,$4,'active',$5,$6) RETURNING *",
+      [
+        id,
+        hash(opaque()),
+        account.id,
+        email,
+        TERMS_VERSION,
+        JSON.stringify(receiptSnapshot()),
+      ],
+    );
+    return r.rows[0];
+  });
+  if (attempt.checkout_id) {
+    const current = await client.checkout.sessions.retrieve(
+      attempt.checkout_id,
+    );
+    if (current.status === "complete")
+      return { url: baseURL() + "/checkout/success" };
+    if (current.status === "open" && current.url) return { url: current.url };
+    if (current.status !== "expired")
+      throw new HttpError(409, "Din betaling kontrolleres. Prøv igen om lidt.");
+    await db().query(
+      "UPDATE shaz_checkout SET state='expired' WHERE id=$1 AND state='active'",
+      [attempt.id],
+    );
+    return createCheckout(account, client);
+  }
+  // Never create a second charge after the provider's idempotency window expired.
+  if (Date.now() - new Date(attempt.created_at).getTime() > 23 * 60 * 60 * 1000)
+    throw new HttpError(
+      409,
+      "En tidligere betalingsstart skal kontrolleres af support, før du prøver igen.",
+    );
+  const s = await client.checkout.sessions.create(
     {
       mode: "payment",
       customer_email: email,
       line_items: [{ price: price.id, quantity: 1 }],
       success_url: baseURL() + "/checkout/success",
       cancel_url: baseURL() + "/checkout?cancelled=1",
-      client_reference_id: id,
-      metadata: { product: "shaz-100-days", terms_version: TERMS_VERSION },
-      payment_intent_data: { metadata: { product: "shaz-100-days" } },
+      client_reference_id: attempt.id,
+      metadata: {
+        product: "shaz-100-days",
+        terms_version: attempt.terms_version,
+        user_id: account.id,
+      },
+      payment_intent_data: {
+        metadata: { product: "shaz-100-days", user_id: account.id },
+      },
       allow_promotion_codes: false,
       automatic_tax: { enabled: false },
       custom_text: {
@@ -105,13 +161,13 @@ export async function createCheckout(email: string) {
         },
       },
     },
-    { idempotencyKey: id },
+    { idempotencyKey: attempt.id },
   );
   await db().query("UPDATE shaz_checkout SET checkout_id=$2 WHERE id=$1", [
-    id,
+    attempt.id,
     s.id,
   ]);
-  return { url: s.url, token };
+  return { url: s.url };
 }
 export function validatePaidSession(s: Stripe.Checkout.Session) {
   const items = s.line_items?.data || [];
@@ -163,12 +219,19 @@ export async function processEvent(
     if (!inserted.rowCount) return null;
     if (paid) {
       const s = paid;
-      const email = s.customer_details!.email!.toLowerCase();
+      let email = s.customer_details!.email!.toLowerCase();
       const reference = await c.query(
-        "SELECT id,terms_version,receipt FROM shaz_checkout WHERE checkout_id=$1 AND id=$2",
+        "SELECT id,terms_version,receipt,user_id,email,state FROM shaz_checkout WHERE id=$2 AND (checkout_id=$1 OR (checkout_id IS NULL AND state='active'))",
         [s.id, s.client_reference_id],
       );
       if (!reference.rowCount) throw new Error("CHECKOUT_REFERENCE_MISMATCH");
+      const owner = reference.rows[0].user_id;
+      if (reference.rows[0].state !== "legacy") {
+        if (!owner || s.metadata?.user_id !== owner)
+          throw new Error("CHECKOUT_ACCOUNT_MISMATCH");
+        // Stripe's editable billing address/email never determines account ownership.
+        email = reference.rows[0].email;
+      }
       const id = crypto.randomUUID();
       const receipt = Object.keys(reference.rows[0].receipt).length
         ? reference.rows[0].receipt
@@ -190,7 +253,7 @@ export async function processEvent(
           ? "disputed"
           : "paid";
       const r = await c.query(
-        `INSERT INTO shaz_orders(id,checkout_id,payment_id,email,amount,currency,livemode,status,product,paid_at,terms_version,receipt) VALUES($1,$2,$3,$4,39900,'dkk',$5,$8,'shaz-100-days',now(),$6,$7) ON CONFLICT(checkout_id) DO NOTHING RETURNING id`,
+        `INSERT INTO shaz_orders(id,checkout_id,payment_id,email,amount,currency,livemode,status,product,paid_at,terms_version,receipt,user_id) VALUES($1,$2,$3,$4,39900,'dkk',$5,$8,'shaz-100-days',now(),$6,$7,$9) ON CONFLICT(checkout_id) DO NOTHING RETURNING id`,
         [
           id,
           s.id,
@@ -202,13 +265,14 @@ export async function processEvent(
           TERMS_VERSION,
           JSON.stringify(receipt),
           status,
+          owner,
         ],
       );
-      await c.query("UPDATE shaz_checkout SET email=$2 WHERE checkout_id=$1", [
-        s.id,
-        email,
-      ]);
-      return r.rowCount ? { id, email, ...receipt } : null;
+      await c.query(
+        "UPDATE shaz_checkout SET email=$2,checkout_id=$3,state=CASE WHEN state='legacy' THEN state ELSE 'complete' END WHERE id=$1",
+        [s.client_reference_id, email, s.id],
+      );
+      return r.rowCount ? { id, email, user_id: owner, ...receipt } : null;
     }
     if (event.type === "charge.refunded") {
       const charge = object as Stripe.Charge;
@@ -246,7 +310,7 @@ export async function processEvent(
     (paid
       ? (
           await db().query(
-            "SELECT id,email,receipt FROM shaz_orders WHERE checkout_id=$1",
+            "SELECT id,email,receipt,user_id FROM shaz_orders WHERE checkout_id=$1",
             [paid.id],
           )
         ).rows[0]
@@ -261,7 +325,7 @@ export async function processEvent(
     const sent = await db().query("SELECT 1 FROM shaz_mail WHERE id=$1", [
       "first-login-" + delivery.id,
     ]);
-    if (!sent.rowCount)
+    if (!delivery.user_id && !sent.rowCount)
       try {
         await requestLogin(
           delivery.email,

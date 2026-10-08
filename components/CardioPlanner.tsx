@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Profile } from "@/lib/profile";
 import type { CardioPlan } from "@/lib/cardio";
 export type CardioRow = {
@@ -15,7 +15,13 @@ export default function CardioPlanner({
   rows,
   today,
   refresh,
+  openId,
+  clearOpen,
+  showList = true,
 }: {
+  openId?: string;
+  clearOpen?: () => void;
+  showList?: boolean;
   profile: Profile;
   rows: CardioRow[];
   today: string;
@@ -41,6 +47,18 @@ export default function CardioPlanner({
     [distance, setDistance] = useState(""),
     [effort, setEffort] = useState(3),
     [move, setMove] = useState("");
+  useEffect(() => {
+    if (!openId) return;
+    const r = rows.find((r) => r.id === openId);
+    if (r) {
+      setSelected(r);
+      setMinutes(r.log.minutes || r.plan.selected.minutes);
+      setDistance(r.log.distance?.toString() || "");
+      setEffort(r.log.effort || 3);
+      setMove("");
+    }
+    clearOpen?.();
+  }, [openId, rows, clearOpen]);
   async function send(path: string, data: unknown) {
     setBusy(true);
     setError("");
@@ -109,42 +127,43 @@ export default function CardioPlanner({
           oven i dit madmål.
         </p>
       )}
-      {list.map((r) => (
-        <div className="training-day" key={r.id}>
-          <span>
-            {new Date(r.scheduled_date + "T12:00:00Z").toLocaleDateString(
-              "da-DK",
-              { weekday: "short", day: "numeric", month: "short" },
-            )}
-            <small>Dag {r.day}</small>
-          </span>
-          <div>
-            <b>{r.plan.selected.title}</b>
-            <small>
-              {r.plan.selected.minutes} min. inkl. opvarmning og afslutning
-            </small>
+      {showList &&
+        list.map((r) => (
+          <div className="training-day" key={r.id}>
+            <span>
+              {new Date(r.scheduled_date + "T12:00:00Z").toLocaleDateString(
+                "da-DK",
+                { weekday: "short", day: "numeric", month: "short" },
+              )}
+              <small>Dag {r.day}</small>
+            </span>
+            <div>
+              <b>{r.plan.selected.title}</b>
+              <small>
+                {r.plan.selected.minutes} min. inkl. opvarmning og afslutning
+              </small>
+            </div>
+            <span className="status">
+              {r.status === "completed"
+                ? "✓ Gennemført"
+                : r.status === "skipped"
+                  ? "Sprunget over"
+                  : "Planlagt"}
+            </span>
+            <button
+              className="p-secondary"
+              onClick={() => {
+                setSelected(r);
+                setMinutes(r.log.minutes || r.plan.selected.minutes);
+                setDistance(r.log.distance?.toString() || "");
+                setEffort(r.log.effort || 3);
+                setMove("");
+              }}
+            >
+              Se pas
+            </button>
           </div>
-          <span className="status">
-            {r.status === "completed"
-              ? "✓ Gennemført"
-              : r.status === "skipped"
-                ? "Sprunget over"
-                : "Planlagt"}
-          </span>
-          <button
-            className="p-secondary"
-            onClick={() => {
-              setSelected(r);
-              setMinutes(r.log.minutes || r.plan.selected.minutes);
-              setDistance(r.log.distance?.toString() || "");
-              setEffort(r.log.effort || 3);
-              setMove("");
-            }}
-          >
-            Se pas
-          </button>
-        </div>
-      ))}
+        ))}
       {edit && (
         <div
           className="p-overlay"

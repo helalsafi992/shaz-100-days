@@ -12,14 +12,20 @@ export default function Account({
   email,
   orders,
   test = false,
+  isAdmin = false,
+  support,
 }: {
   email: string;
+  isAdmin?: boolean;
+  support?: string;
   test?: boolean;
   orders: Order[];
 }) {
   const [message, setMessage] = useState(""),
     [confirm, setConfirm] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [currentPassword, setCurrentPassword] = useState(""),
+    [newPassword, setNewPassword] = useState("");
   async function action(path: string, data: unknown) {
     setBusy(true);
     try {
@@ -47,7 +53,7 @@ export default function Account({
       <div className="p-page-heading">
         <div>
           <span className="p-eyebrow">PROFIL & INDSTILLINGER</span>
-          <h1>Din konto. Dine valg.</h1>
+          <h1>Profil og indstillinger.</h1>
           <p>{email}</p>
         </div>
       </div>
@@ -56,7 +62,51 @@ export default function Account({
           {message}
         </p>
       )}
-      {test && <section className="p-card"><span className="p-eyebrow">DIN TESTPROFIL</span><h2>Prøv hele forløbet.</h2><p>Nulstilling sletter kun dine fiktive planer og registreringer her. Din konto og adgangskode bevares.</p><div className="p-actions">{[false,true].map(populated => <button className="p-secondary" key={String(populated)} disabled={busy} onClick={async()=>{if(!window.confirm("Nulstil din testprofil og dens registreringer?"))return;setBusy(true);try{const r=await fetch("/api/test/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({populated})});if(!r.ok)throw new Error();location.href=populated?"/app":"/onboarding";}catch{setMessage("Nulstillingen kunne ikke gennemføres.");setBusy(false);}}}>{populated?"Gendan udfyldt testprofil":"Nulstil og prøv onboarding"}</button>)}</div><a href="/admin">Åbn testadministration</a></section>}
+      {test && (
+        <section className="p-card">
+          <span className="p-eyebrow">DIN TESTPROFIL</span>
+          <h2>Prøv hele forløbet.</h2>
+          <p>
+            Nulstilling sletter kun dine fiktive planer og registreringer her.
+            Din konto og adgangskode bevares.
+          </p>
+          <div className="p-actions">
+            {[false, true].map((populated) => (
+              <button
+                className="p-secondary"
+                key={String(populated)}
+                disabled={busy}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      "Nulstil din testprofil og dens registreringer?",
+                    )
+                  )
+                    return;
+                  setBusy(true);
+                  try {
+                    const r = await fetch("/api/test/profile", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ populated }),
+                    });
+                    if (!r.ok) throw new Error();
+                    location.href = populated ? "/app" : "/onboarding";
+                  } catch {
+                    setMessage("Nulstillingen kunne ikke gennemføres.");
+                    setBusy(false);
+                  }
+                }}
+              >
+                {populated
+                  ? "Gendan udfyldt testprofil"
+                  : "Nulstil og prøv onboarding"}
+              </button>
+            ))}
+          </div>
+          {isAdmin && <a href="/admin">Åbn testadministration</a>}
+        </section>
+      )}
       <div className="p-grid">
         <section className="p-card">
           <h2>Tilpas dit forløb.</h2>
@@ -126,6 +176,69 @@ export default function Account({
           </p>
         </section>
         <section className="p-card">
+          <h2>Adgangskode.</h2>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusy(true);
+              try {
+                const r = await fetch("/api/auth/change-password", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    currentPassword,
+                    newPassword,
+                    revokeOtherSessions: true,
+                  }),
+                });
+                const d = await r.json();
+                if (!r.ok)
+                  throw Error(d.message || "Adgangskoden kunne ikke ændres.");
+                setCurrentPassword("");
+                setNewPassword("");
+                setMessage(
+                  "Adgangskoden er ændret. Andre enheder er logget ud.",
+                );
+              } catch (e) {
+                setMessage(e instanceof Error ? e.message : "Prøv igen.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <label>
+              Nuværende adgangskode
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+            </label>
+            <label>
+              Ny adgangskode
+              <input
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={12}
+                maxLength={128}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </label>
+            <button className="p-secondary" disabled={busy}>
+              Gem ny adgangskode
+            </button>
+          </form>
+          <p className="p-note">
+            Har du hidtil brugt e-maillink? Brug{" "}
+            <a href="/login?action=forgot">Glemt adgangskode</a> til at oprette
+            din første adgangskode.
+          </p>
+        </section>
+        <section className="p-card">
           <h2>Dine oplysninger.</h2>
           <a className="p-secondary" href="/api/platform/export">
             Download mine data
@@ -159,7 +272,12 @@ export default function Account({
           <br />
           <a href="/privacy">Privatlivspolitik</a>
           <br />
-          <a href="/admin">Administration</a>
+          {isAdmin && <a href="/admin">Administration</a>}
+          {support && (
+            <p>
+              <a href={"mailto:" + support}>Kontakt support</a>
+            </p>
+          )}
           <button
             className="p-secondary"
             onClick={async () => {

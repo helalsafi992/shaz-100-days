@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "SHAZ — 100 DAY TRANSFORMATION",
   description:
-    "100 dage. En stærkere version af dig. Træning, kost og struktur til 399 kr. én gang.",
+    "Din træning. Din madplan. Dine næste 100 dage. Træning, cardio og måltider tilpasset dine valg. 399 kr. én gang.",
   icons: { icon: "/favicon.svg" },
 };
 export default function Layout({ children }: { children: React.ReactNode }) {

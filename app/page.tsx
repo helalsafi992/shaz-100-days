@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { access } from "@/lib/auth";
+import { salesOpen } from "@/lib/payments";
+export const dynamic = "force-dynamic";
 const faqs = [
   [
     "Kan jeg være med som begynder?",
@@ -17,7 +21,30 @@ const faqs = [
     "Nej. Et digitalt, selvstyret forløb med tilpasning efter dine valg. Ingen 1:1-coaching eller resultatgaranti.",
   ],
 ];
-export default function Home() {
+export default async function Home() {
+  const entitled = await access(await headers())
+    .then(() => true)
+    .catch(() => false);
+  const open = salesOpen();
+  function Buy({ className = "button accent" }: { className?: string }) {
+    return entitled ? (
+      <a className={className} href="/app">
+        Mit forløb
+      </a>
+    ) : open ? (
+      <a className={className} href="/checkout">
+        Køb forløbet – 399 kr.
+      </a>
+    ) : (
+      <button
+        className={className}
+        disabled
+        aria-label="Køb forløbet – 399 kr. Salg er ikke åbnet"
+      >
+        Køb forløbet – 399 kr.
+      </button>
+    );
+  }
   return (
     <>
       <header className="header">
@@ -25,13 +52,14 @@ export default function Home() {
           SHAZ<span>100 DAY SYSTEM</span>
         </a>
         <nav>
-          <a href="#indhold">DET FÅR DU</a>
-          <a href="#forloeb">DE 100 DAGE</a>
-          <a href="#faq">SPØRGSMÅL</a>
+          <a href="#indhold">Det får du</a>
         </nav>
-        <a className="navcta" href="/checkout">
-          KØB — 399 KR.
-        </a>
+        <div className="sales-header-actions">
+          <a className="sales-login" href={entitled ? "/app" : "/login"}>
+            {entitled ? "Mit forløb" : "Log ind"}
+          </a>
+          <Buy className="navcta" />
+        </div>
       </header>
       <main>
         <section className="hero conversionhero">
@@ -39,33 +67,31 @@ export default function Home() {
             <div>
               <span className="eyebrow">ET SYSTEM. 100 DAGE. DIN HVERDAG.</span>
               <h1>
-                100 DAGE.
+                Din træning.
                 <br />
-                DIN TRÆNING.
+                Din madplan.
                 <br />
-                DIN KOST.
-                <br />
-                <span>DIN TRANSFORMATION.</span>
+                <span>Dine næste 100 dage.</span>
               </h1>
               <p className="herodesc">
-                En plan, du kan følge. Mad, du har lyst til. Struktur, der
-                passer til dig.
+                Træning, cardio og måltider samlet i ét forløb, tilpasset dine
+                valg.
               </p>
               <div className="hero-price">
                 399 kr. <span>Én gang. Intet abonnement.</span>
               </div>
               <div className="hero-actions">
-                <a className="button accent" href="/checkout">
-                  KØB FORLØBET
-                </a>
+                <Buy />
                 <a className="secondary" href="#indhold">
                   SE HVAD DU FÅR
                 </a>
               </div>
-              <p className="launch-note">
-                Under klargøring · Rigtige køb er endnu ikke åbnet.{" "}
-                <a href="/preview">Prøv demoen</a>
-              </p>
+              {!open && !entitled && (
+                <p className="launch-note" role="status">
+                  Salg er ikke åbnet endnu. Har du adgang?{" "}
+                  <a href="/login">Log ind på dit forløb</a>.
+                </p>
+              )}
               <div className="herochecks">
                 <span>Hjemme eller fitness</span>
                 <span>Tilpasset dit niveau</span>
@@ -77,17 +103,16 @@ export default function Home() {
                 <b>SHAZ / DIT FORLØB</b>
                 <span>KUNDEPLATFORM</span>
               </div>
-              <a className="real-product-preview" href="/preview">
+              <div className="real-product-preview">
                 <img
                   src="/platform-preview.jpg"
                   width="390"
                   height="844"
                   alt="SHAZ-kundeområdet vist fra en fiktiv testkonto"
                 />
-              </a>
+              </div>
               <p className="preview-caption">
                 Faktisk produktvisning · Fiktiv testkonto{" "}
-                <a href="/preview">Se platformen →</a>
               </p>
             </div>
           </div>
@@ -122,17 +147,17 @@ export default function Home() {
               [
                 "01",
                 "EN PLAN FOR DIN TRÆNING",
-                "Programmer til hjemmet og fitness. Øvelsesforklaringer og progression.",
+                "Styrke til hjemmet eller fitness, valgfri cardio og én samlet ugeplan.",
               ],
               [
                 "02",
                 "MAD, DER PASSER TIL DIG",
-                "Opskrifter, portionsvalg og indkøbslister. Med plads til dine præferencer.",
+                "Kalorieberegning, 2–6 måltider, tre egnede valg og en indkøbsliste, der følger din plan.",
               ],
               [
                 "03",
                 "STYR PÅ DIN FREMGANG",
-                "Dagens træning, ugens fokus og overblik over det, du har gennemført.",
+                "Registrér sæt, vægt og cardio. Se din faktiske udvikling og tilpas kommende uger.",
               ],
             ].map(([n, h, p]) => (
               <article key={n}>
@@ -156,9 +181,7 @@ export default function Home() {
               <br />
               Så passer planen til dit udgangspunkt.
             </p>
-            <a className="button accent" href="/checkout">
-              START DIN TRANSFORMATION
-            </a>
+            <Buy />
           </div>
           <div className="journey">
             {[
@@ -221,18 +244,17 @@ export default function Home() {
             </div>
             <p>Én engangsbetaling. Intet abonnement.</p>
             <ul>
-              <li>100 dages struktureret træning</li>
-              <li>Hjemme- eller fitnessprogram</li>
-              <li>Kostinspiration & opskrifter</li>
+              <li>100 dage med træning og restitution</li>
+              <li>Styrkeprogram og valgfri cardio</li>
+              <li>Kalorieberegning, madplan & opskrifter</li>
               <li>Indkøbslister & ugentlige mål</li>
               <li>Dit personlige overblik</li>
             </ul>
-            <a className="button" href="/checkout">
-              KØB FORLØBET
-            </a>
+            <Buy className="button" />
             <small>
-              Salg er lukket under klargøring. Se den faktiske platform i
-              forhåndsvisningen.
+              {open
+                ? "Samlet kundepris. Ingen skjulte gebyrer."
+                : "Salg er ikke åbnet. Eksisterende kunder kan logge ind."}
             </small>
           </div>
         </section>
@@ -261,20 +283,24 @@ export default function Home() {
         <span>100 DAY TRANSFORMATION</span>
         <div>
           <a href="/login">Log ind</a>
-          <a href="/preview">Se platformen</a>
+          {process.env.SUPPORT_EMAIL && (
+            <a href={"mailto:" + process.env.SUPPORT_EMAIL}>Kontakt</a>
+          )}
           <a href="/privacy">Privatliv</a>
           <a href="/terms">Vilkår</a>
         </div>
-        <span>KUNDEPLATFORM · SALG UNDER KLARGØRING</span>
+        <span>
+          {process.env.SELLER_NAME
+            ? `${process.env.SELLER_NAME} · CVR ${process.env.SELLER_CVR} · ${process.env.SELLER_ADDRESS}`
+            : "Sælger- og kontaktoplysninger offentliggøres, før salg åbner."}
+        </span>
       </footer>
       <div className="mobilebuy">
         <div>
           <b>399 kr.</b>
           <span>Én gang. 100 dage.</span>
         </div>
-        <a className="button accent" href="/checkout">
-          KØB FORLØBET
-        </a>
+        <Buy />
       </div>
     </>
   );

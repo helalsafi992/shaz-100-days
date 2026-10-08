@@ -146,7 +146,7 @@ export async function changeFuture(user: string, data: unknown) {
     );
     for (const d of plan)
       await c.query(
-        `UPDATE shaz_days SET plan=$3,status=$4,updated_at=now() WHERE user_id=$1 AND day=$2 AND scheduled_date>($5::date) AND status IN ('planned','rest') AND log='{}'::jsonb`,
+        `UPDATE shaz_days SET plan=$3,status=$4,updated_at=now() WHERE user_id=$1 AND day=$2 AND scheduled_date>($5::date) AND status IN ('planned','rest') AND log='{}'::jsonb AND NOT EXISTS(SELECT 1 FROM shaz_workout_drafts wd WHERE wd.day_id=shaz_days.id)`,
         [
           user,
           d.day,

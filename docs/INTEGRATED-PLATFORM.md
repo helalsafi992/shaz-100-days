@@ -11,7 +11,7 @@ Under Profil kan den autoriserede testkonto nulstille til en fiktiv udfyldt plan
 
 ## Kunderejsen
 
-Opret konto → e-mailbekræftelse → verificeret engangskøb 399 DKK → behov → aktivering → 100 kalenderdage. Gamle magic-link-konti og ordrebaseret adgang bevares. Password-reset bruger Better Auth og tilbagekalder gamle sessions. Verifikationsmail kølægges efter signup-transaktionen, så der ikke opstår en indlejret ventetilstand i databasepoolen. Ingen livebetaling er åbnet.
+Kontooprettelse/login på checkout → Stripe → verificeret engangskøb 399 DKK → tre dele opsætning → aktivt bekræftet startdato → 100 kalenderdage. E-mailbekræftelse sendes automatisk ved signup. En ubekræftet Better Auth-session kan kun bruge checkout/status; alle profil-, plan- og adminendpoints kræver fortsat bekræftet e-mail, og kundeindhold kræver køb eller isoleret testadgang. Ved forsinket webhook/verification poller success-siden; URL eller ordrenummer giver aldrig adgang. Gamle magic-link-konti og ordrebaseret adgang bevares. Password-reset bruger Better Auth og tilbagekalder gamle sessions. Verifikationsmail kølægges efter signup-transaktionen, så der ikke opstår en indlejret ventetilstand i databasepoolen. Ingen livebetaling er åbnet.
 
 `/demo` viderestiller til forhåndsvisningen af den faktiske platform. Login og køb fører ikke til Beta.tsx. Dagens skærm viser handling, måltider, mål, uge og registreringer. En planlagt ret er ikke spist. Navigation: I dag / Træning / Mad / Fremgang.
 
@@ -39,3 +39,9 @@ Admin vedligeholder versionsopdelt indhold, portioner, øvelser/alternativer, sk
 ## Bevidst adskillelse fra kundelancering
 
 Den fulde funktionelle afprøvning foregår på staging. Fagligt uafklarede beregningsregler er ikke frigivet til kunder: serveren kræver publiceret ernæringsregel og CONTENT_APPROVED uden for det isolerede testmiljø. Se LAUNCH.md for betaling, mail, virksomhed/jura, videoer, faglig review, databeskyttelse og produktionsbackup. Ingen eksisterende produktionsdata er nulstillet eller migreret destruktivt.
+
+
+## Samlet køb og kalender, oktober 2026
+Migration 005 er additiv: legacy-checkout og konti bevares. Nye checkoutforsøg bindes til user_id, får én aktiv DB-række pr. konto og en holdbar Stripe-idempotensnøgle før netværkskald. Uafsluttede sessioner genoptages; et komplet køb går til verificeringsstatus. Ændret Stripe-billing-email flytter ikke ejerskab. Et ubekræftet betalingsforsøg ældre end 23 timer blokeres til afstemning, så udløbet Stripe-idempotens ikke kan skabe en ny opkrævning.
+
+I dag og Træning bruger samme kalenderklassifikation for styrke, cardio og restitution. Tællere adskiller gennemførte pas. Fremtidige planændringer beskytter også træningskladder. Profilens administrationslink afhænger af serverens rolleopslag.

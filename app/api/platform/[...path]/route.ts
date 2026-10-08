@@ -253,6 +253,7 @@ export async function POST(
       return Response.json({ ok: true });
     }
     if (path === "activate") {
+      z.object({confirmStart:z.literal(true)}).parse(input);
       await activate(s.user.id);
       return Response.json({ ok: true });
     }

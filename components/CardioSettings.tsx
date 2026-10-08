@@ -1,0 +1,171 @@
+"use client";
+import type { Profile } from "@/lib/profile";
+export const noCardio: NonNullable<Profile["cardio"]> = {
+  days: 0,
+  weekdays: [],
+  minutes: 20,
+  forms: ["walk"],
+  equipment: ["outdoors"],
+  level: "beginner",
+  intensity: "easy",
+};
+export default function CardioSettings({
+  value,
+  onChange,
+}: {
+  value: NonNullable<Profile["cardio"]>;
+  onChange: (v: NonNullable<Profile["cardio"]>) => void;
+}) {
+  const field = <K extends keyof typeof value>(k: K, v: (typeof value)[K]) =>
+    onChange({ ...value, [k]: v });
+  return (
+    <fieldset>
+      <legend>Valgfri ekstra cardio</legend>
+      <div className="form-grid">
+        <label>
+          Cardiopas om ugen
+          <select
+            value={value.days}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                days: Number(e.target.value),
+                weekdays: value.weekdays.slice(0, Number(e.target.value)),
+              })
+            }
+          >
+            {[0, 1, 2, 3, 4].map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? "Ingen ekstra cardio" : n}
+              </option>
+            ))}
+          </select>
+        </label>
+        {value.days > 0 && (
+          <>
+            <label>
+              Ønsket varighed (min.)
+              <input
+                type="number"
+                min={10}
+                max={60}
+                step={5}
+                value={value.minutes}
+                onChange={(e) => field("minutes", Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Cardioerfaring
+              <select
+                value={value.level}
+                onChange={(e) =>
+                  field("level", e.target.value as typeof value.level)
+                }
+              >
+                <option value="beginner">Begynder</option>
+                <option value="intermediate">Let øvet</option>
+              </select>
+            </label>
+            <label>
+              Belastning
+              <select
+                value={value.intensity}
+                onChange={(e) =>
+                  field("intensity", e.target.value as typeof value.intensity)
+                }
+              >
+                <option value="easy">Let · tal ubesværet</option>
+                <option value="moderate">Moderat · tydelig vejrtrækning</option>
+              </select>
+            </label>
+          </>
+        )}
+      </div>
+      {value.days > 0 && (
+        <>
+          <p>
+            Vælg {value.days} dage. Bevar mindst én dag uden styrke eller
+            cardio.
+          </p>
+          <div className="weekday-choices">
+            {["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"].map((l, i) => (
+              <label key={i} className="p-check">
+                <input
+                  type="checkbox"
+                  checked={value.weekdays.includes(i)}
+                  onChange={(e) =>
+                    field(
+                      "weekdays",
+                      e.target.checked
+                        ? [...value.weekdays, i]
+                        : value.weekdays.filter((d) => d !== i),
+                    )
+                  }
+                />
+                {l}
+              </label>
+            ))}
+          </div>
+          <h3>Træningsformer</h3>
+          <div className="form-grid">
+            {(
+              [
+                ["walk", "Gang"],
+                ["cycle", "Cykling"],
+                ["walk-run", "Løb/gang"],
+                ["elliptical", "Crosstrainer"],
+              ] as const
+            ).map(([v, l]) => (
+              <label className="p-check" key={v}>
+                <input
+                  type="checkbox"
+                  checked={value.forms.includes(v)}
+                  onChange={(e) =>
+                    field(
+                      "forms",
+                      e.target.checked
+                        ? [...value.forms, v]
+                        : value.forms.filter((x) => x !== v),
+                    )
+                  }
+                />
+                {l}
+              </label>
+            ))}
+          </div>
+          <h3>Tilgængeligt cardioudstyr</h3>
+          <div className="form-grid">
+            {(
+              [
+                ["outdoors", "Udendørs"],
+                ["bike", "Cykel / motionscykel"],
+                ["treadmill", "Løbebånd"],
+                ["elliptical", "Crosstrainer"],
+              ] as const
+            ).map(([v, l]) => (
+              <label className="p-check" key={v}>
+                <input
+                  type="checkbox"
+                  checked={value.equipment.includes(v)}
+                  onChange={(e) =>
+                    field(
+                      "equipment",
+                      e.target.checked
+                        ? [...value.equipment, v]
+                        : value.equipment.filter((x) => x !== v),
+                    )
+                  }
+                />
+                {l}
+              </label>
+            ))}
+          </div>
+          <p className="p-note">
+            Cardio lægges omkring styrken. Begyndere starter højst med 20
+            minutter. Kalorier fra træning lægges ikke oven i madmålet.
+          </p>
+        </>
+      )}
+    </fieldset>
+  );
+}

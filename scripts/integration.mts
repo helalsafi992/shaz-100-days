@@ -204,7 +204,10 @@ try {
           const r = await post("profile", { data: profiles[i], step }, h);
           assert.equal(r.status, 200, JSON.stringify(r.data));
         }
-        assert.equal((await post("activate", {}, h)).status, 200);
+        assert.equal(
+          (await post("activate", { confirmStart: true }, h)).status,
+          200,
+        );
         const state = await snapshot(s.user.id);
         assert.equal(state.days.length, 100);
         const day = state.days.find((d) => d.scheduled_date === today);
@@ -935,6 +938,149 @@ try {
       );
     },
   );
+  await check(
+    "Bound checkout retries, resumption, amount, ownership, verification and webhook idempotency",
+    async () => {
+      const { createCheckout } = await import("../lib/payments");
+      const temporary = {
+        SALES_ENABLED: "true",
+        LEGAL_APPROVED: "true",
+        CONTENT_APPROVED: "true",
+        DELIVERY_VERIFIED: "true",
+        RESEND_API_KEY: "fixture",
+        RESEND_WEBHOOK_SECRET: "fixture",
+        EMAIL_FROM: "test@example.invalid",
+        SUPPORT_EMAIL: "support@example.invalid",
+        SELLER_NAME: "Fixture",
+        SELLER_CVR: "12345678",
+        SELLER_ADDRESS: "Fixture",
+      };
+      const previous = Object.fromEntries(
+        Object.keys(temporary).map((k) => [k, process.env[k]]),
+      );
+      const statuses = (
+        await db().query("SELECT id,kind,version,status FROM shaz_content")
+      ).rows;
+      try {
+        Object.assign(process.env, temporary);
+        await db().query("UPDATE shaz_content SET status='published'");
+        const account = (
+          await auth().api.signUpEmail({
+            body: {
+              name: "Bound fixture",
+              email: "bound-checkout@example.invalid",
+              password: randomBytes(24).toString("base64url"),
+            },
+          })
+        ).user;
+        let fail = true,
+          created = 0;
+        const sessions = new Map<string, any>();
+        const client = {
+          prices: {
+            retrieve: async () => ({
+              id: env.STRIPE_PRICE_ID,
+              unit_amount: 39900,
+              currency: "dkk",
+              type: "one_time",
+              active: true,
+              livemode: false,
+              tax_behavior: "inclusive",
+            }),
+          },
+          checkout: {
+            sessions: {
+              create: async (body: any, opts: any) => {
+                if (!sessions.has(opts.idempotencyKey)) {
+                  created++;
+                  sessions.set(opts.idempotencyKey, {
+                    ...body,
+                    id: "cs_bound_fixture",
+                    url: "https://checkout.stripe.com/isolated-fixture",
+                    status: "open",
+                  });
+                }
+                if (fail) {
+                  fail = false;
+                  throw Error("simulated ambiguous network failure");
+                }
+                return sessions.get(opts.idempotencyKey);
+              },
+              retrieve: async () => [...sessions.values()][0],
+            },
+          },
+        } as unknown as Stripe;
+        await assert.rejects(createCheckout(account, client));
+        const retry = await createCheckout(account, client);
+        const resume = await createCheckout(account, client);
+        assert.equal(created, 1);
+        assert.equal(retry.url, resume.url);
+        const attempt = (
+          await db().query("SELECT * FROM shaz_checkout WHERE user_id=$1", [
+            account.id,
+          ])
+        ).rows[0];
+        const paid = {
+          ...sessions.get(attempt.id),
+          client_reference_id: attempt.id,
+          amount_total: 39900,
+          currency: "dkk",
+          livemode: false,
+          payment_status: "paid",
+          customer_details: { email: "changed-billing@example.invalid" },
+          payment_intent: "pi_bound_fixture",
+          line_items: {
+            data: [{ price: { id: env.STRIPE_PRICE_ID }, quantity: 1 }],
+          },
+        } as Stripe.Checkout.Session;
+        const event = {
+          id: "evt_bound_fixture",
+          type: "checkout.session.completed",
+          livemode: false,
+          data: { object: paid },
+        } as Stripe.Event;
+        await assert.rejects(
+          processEvent(event, async () => ({
+            ...paid,
+            metadata: { ...paid.metadata, user_id: users[0].id },
+          })),
+        );
+        await processEvent(event, async () => paid);
+        await processEvent(event, async () => paid);
+        const orders = (
+          await db().query("SELECT * FROM shaz_orders WHERE checkout_id=$1", [
+            paid.id,
+          ])
+        ).rows;
+        assert.equal(orders.length, 1);
+        assert.equal(orders[0].user_id, account.id);
+        assert.equal(orders[0].email, account.email);
+        assert.equal(
+          (
+            await db().query(
+              "SELECT 1 FROM shaz_mail WHERE email=$1 AND kind='login'",
+              [account.email],
+            )
+          ).rowCount,
+          0,
+        );
+        await assert.rejects(createCheckout(account, client));
+        assert.equal(
+          (await post("activate", {}, users[0].headers)).status,
+          400,
+        );
+      } finally {
+        for (const [k, v] of Object.entries(previous))
+          if (v === undefined) delete process.env[k];
+          else process.env[k] = v;
+        for (const row of statuses)
+          await db().query(
+            "UPDATE shaz_content SET status=$4 WHERE id=$1 AND kind=$2 AND version=$3",
+            [row.id, row.kind, row.version, row.status],
+          );
+      }
+    },
+  );
   const browserPassword = randomBytes(24).toString("base64url");
   await check(
     "Ordinary password signup, e-mail verification, reset, no-purchase denial and legacy account compatibility",
@@ -956,9 +1102,19 @@ try {
       assert.equal(signupResponse.status, 200);
       const signup = await signupResponse.json();
       assert.ok(signup.user.id);
-      await assert.rejects(
-        auth().api.signInEmail({ body: { email, password }, headers }),
-      );
+      // An ordinary unverified session can resume checkout, but cannot read product data.
+      const unverified = await auth().api.signInEmail({
+        body: { email, password },
+        headers,
+        asResponse: true,
+      });
+      assert.equal(unverified.status, 200);
+      const unverifiedCookie = unverified.headers
+        .getSetCookie()
+        .map((c) => c.split(";")[0])
+        .join("; ");
+      await assert.rejects(session(new Headers({ cookie: unverifiedCookie })));
+      await assert.rejects(access(new Headers({ cookie: unverifiedCookie })));
       const mail = (
         await db().query(
           "SELECT payload FROM shaz_mail WHERE email=$1 AND kind='verify-email' ORDER BY created_at DESC LIMIT 1",
@@ -1465,6 +1621,11 @@ try {
       assert.ok((await dialog.textContent())?.includes("2 portion(er)"));
       await page.getByRole("button", { name: "Luk opskrift" }).click();
       await page.goto(env.APP_URL + "/preview");
+      assert.equal(new URL(page.url()).pathname, "/");
+      assert.equal(
+        await page.getByText("Prøv demoen", { exact: true }).count(),
+        0,
+      );
       assert.equal(
         await page
           .locator("img")

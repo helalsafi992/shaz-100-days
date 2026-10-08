@@ -24,7 +24,8 @@ function createAuth() {
       enabled: true,
       minPasswordLength: 12,
       maxPasswordLength: 128,
-      requireEmailVerification: true,
+      // An unverified session may only use checkout. Product/profile routes still require session().
+      requireEmailVerification: false,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, token }) => {
         await sendMail(user.email, "password-reset", {
@@ -69,11 +70,16 @@ let instance: ReturnType<typeof createAuth> | undefined;
 export function auth() {
   return (instance ??= createAuth());
 }
-export async function session(headers: Headers) {
+export async function accountSession(headers: Headers) {
   await schema();
   const s = await auth().api.getSession({ headers });
-  if (!s?.user.emailVerified)
-    throw new HttpError(401, "Log ind og bekræft din e-mail.");
+  if (!s) throw new HttpError(401, "Log ind på din konto.");
+  return s;
+}
+export async function session(headers: Headers) {
+  const s = await accountSession(headers);
+  if (!s.user.emailVerified)
+    throw new HttpError(401, "Bekræft din e-mail for at åbne dit forløb.");
   return s;
 }
 export const liveMode = () => process.env.STRIPE_MODE === "live";

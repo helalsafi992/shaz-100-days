@@ -1,3 +1,4 @@
+import { salesOpen } from "@/lib/payments";
 export default function Gate({ message }: { message: string }) {
   return (
     <main className="portal auth-page">
@@ -12,9 +13,13 @@ export default function Gate({ message }: { message: string }) {
           <a className="p-button" href="/login">
             Log ind
           </a>
-          <a className="p-secondary" href="/checkout">
-            Køb adgang · 399 kr.
-          </a>
+          {salesOpen() ? (
+            <a className="p-secondary" href="/checkout">
+              Køb forløbet – 399 kr.
+            </a>
+          ) : (
+            <span className="p-note">Salg er ikke åbnet.</span>
+          )}
           <a className="p-secondary" href="/app/profile">
             Mit køb & hjælp
           </a>

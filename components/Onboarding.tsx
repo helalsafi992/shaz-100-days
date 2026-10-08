@@ -9,16 +9,15 @@ import {
 } from "@/lib/profile";
 import { exercises } from "@/lib/training";
 import { ingredients } from "@/lib/recipes";
+import CardioSettings, { noCardio } from "./CardioSettings";
+import { deficitLevels } from "@/lib/nutrition";
 const titles = [
-  "Dit mål. Dit udgangspunkt.",
-  "Et sted, der passer dig.",
-  "Find din ugerytme.",
-  "Hvor meget tid har du?",
-  "Mad, du har lyst til.",
-  "Vælg din tilgang.",
-  "Kun det nødvendige.",
-  "Din plan er klar til start.",
+  "Mål og udgangspunkt.",
+  "Træning, cardio og din uge.",
+  "Mad, beregning og måltider.",
+  "Klar til dine 100 dage.",
 ];
+const storedSteps = [0, 1, 4, 7];
 export default function Onboarding({
   initial,
   initialStep = 0,
@@ -28,12 +27,31 @@ export default function Onboarding({
   initialStep?: number;
   editing?: boolean;
 }) {
-  const [p, setP] = useState<Profile>({ ...defaults, ...initial }),
-    [step, setStep] = useState(Math.min(initialStep, 7)),
+  const [p, setP] = useState<Profile>({
+      ...defaults,
+      ...initial,
+      everydayActivity: initial.everydayActivity || "moving",
+      trainingActivity: initial.trainingActivity || "regular",
+    }),
+    [step, setStep] = useState(
+      initialStep >= 7 ? 3 : initialStep >= 4 ? 2 : initialStep >= 1 ? 1 : 0,
+    ),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [startConfirmed, setStartConfirmed] = useState(editing);
+  const calculation = energy(p);
   function field<K extends keyof Profile>(k: K, v: Profile[K]) {
-    setP((x) => ({ ...x, [k]: v }));
+    setP((x) => ({
+      ...x,
+      ...(k === "nutrition" && v === "calculated"
+        ? {
+            activity: x.activity || "moderate",
+            everydayActivity: x.everydayActivity || "moving",
+            trainingActivity: x.trainingActivity || "regular",
+          }
+        : {}),
+      [k]: v,
+    }));
   }
   async function save(next: number, activate = false) {
     if (editing && !activate) {
@@ -46,7 +64,7 @@ export default function Onboarding({
       const r = await fetch("/api/platform/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: p, step: next }),
+        body: JSON.stringify({ data: p, step: storedSteps[next] }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
@@ -55,7 +73,7 @@ export default function Onboarding({
           const a = await fetch("/api/platform/activate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: "{}",
+            body: JSON.stringify({ confirmStart: true }),
           });
           const b = await a.json();
           if (!a.ok) throw new Error(b.error);
@@ -102,10 +120,10 @@ export default function Onboarding({
       <section className="onboard-shell">
         <div className="onboard-progress">
           <span>{editing ? "TILPAS DIN PLAN" : "DIT UDGANGSPUNKT"}</span>
-          <span>{step + 1} / 8</span>
+          <span>{step === 3 ? "OPSUMMERING" : `DEL ${step + 1} AF 3`}</span>
         </div>
         <div className="p-track">
-          <i style={{ width: `${((step + 1) / 8) * 100}%` }} />
+          <i style={{ width: `${((step + 1) / 4) * 100}%` }} />
         </div>
         <h1>{titles[step]}</h1>
         <p className="p-muted">
@@ -180,7 +198,7 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 2 && (
+        {step === 1 && (
           <>
             <div className="p-choices">
               {([2, 3, 4] as const).map((d) => (
@@ -225,7 +243,7 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 3 && (
+        {step === 1 && (
           <>
             {choices(
               "minutes",
@@ -238,8 +256,15 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 4 && (
+        {step === 1 && (
+          <CardioSettings
+            value={p.cardio || noCardio}
+            onChange={(v) => field("cardio", v)}
+          />
+        )}
+        {step === 2 && (
           <>
+            <h2>Kostpræferencer</h2>
             {choices("diet", ["all", "vegetarian", "halal"])}
             <h2>Madlavningstid</h2>
             {choices(
@@ -285,9 +310,57 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 5 && (
+        {step === 2 && (
           <>
+            <h2>Din beregning</h2>
             {choices("nutrition", ["portions", "calculated"])}
+            <label>
+              Måltider pr. dag
+              <select
+                value={p.mealCount || 4}
+                onChange={(e) =>
+                  setP({
+                    ...p,
+                    mealCount: Number(e.target.value),
+                    mealNames: undefined,
+                    mealTimes: undefined,
+                  })
+                }
+              >
+                {[2, 3, 4, 5, 6].map((n) => (
+                  <option key={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+            <p className="p-note">
+              Samme dagsmål fordeles på dit valgte antal måltider. Du kan
+              navngive dem og ændre tidspunkterne i madplanen.
+            </p>
+            {p.goal === "fat-loss" && p.nutrition === "calculated" && (
+              <label>
+                Ønsket underskud
+                <select
+                  value={p.deficitLevel || "moderate"}
+                  onChange={(e) =>
+                    field(
+                      "deficitLevel",
+                      e.target.value as Profile["deficitLevel"],
+                    )
+                  }
+                >
+                  {deficitLevels.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} · {l.percent}%
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Produktindstillinger til faglig gennemgang. Uegnede valg
+                  blokeres. Aggressivt kræver løbende evaluering og gives aldrig
+                  for alle 100 dage.
+                </small>
+              </label>
+            )}
             <div className="p-card">
               <h2>Portioner er et godt udgangspunkt.</h2>
               <p>
@@ -304,7 +377,7 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 6 &&
+        {step === 2 &&
           (p.nutrition === "portions" ? (
             <div className="p-card">
               <span className="p-eyebrow">INGEN TAL PÅ KROPPEN KRÆVET</span>
@@ -346,22 +419,48 @@ export default function Onboarding({
                 Den oprindelige Mifflin–St Jeor-formel bruger to biologiske
                 kategorier. Vælg portioner, hvis den ikke passer til dig.
               </p>
-              <label>
-                Din samlede daglige aktivitet
-                <select
-                  value={p.activity || ""}
-                  onChange={(e) =>
-                    field("activity", e.target.value as Profile["activity"])
-                  }
-                >
-                  <option value="">Vælg</option>
-                  <option value="low">Mest siddende, lidt aktivitet</option>
-                  <option value="moderate">
-                    En del gang og regelmæssig træning
-                  </option>
-                  <option value="high">Fysisk aktiv hverdag og træning</option>
-                </select>
-              </label>
+              <div className="form-grid">
+                <label>
+                  Hverdagsaktivitet
+                  <select
+                    value={p.everydayActivity || "moving"}
+                    onChange={(e) =>
+                      setP({
+                        ...p,
+                        activity: "moderate",
+                        everydayActivity: e.target
+                          .value as Profile["everydayActivity"],
+                      })
+                    }
+                  >
+                    <option value="seated">Mest siddende</option>
+                    <option value="moving">En del gang og bevægelse</option>
+                    <option value="physical">Fysisk aktiv hverdag</option>
+                  </select>
+                </label>
+                <label>
+                  Samlet træningsaktivitet
+                  <select
+                    value={p.trainingActivity || "regular"}
+                    onChange={(e) =>
+                      setP({
+                        ...p,
+                        activity: "moderate",
+                        trainingActivity: e.target
+                          .value as Profile["trainingActivity"],
+                      })
+                    }
+                  >
+                    <option value="light">Let</option>
+                    <option value="regular">Regelmæssig</option>
+                    <option value="heavy">Høj</option>
+                  </select>
+                </label>
+              </div>
+              <p className="p-note">
+                Mifflin–St Jeor og én aktivitetsfaktor for hverdag plus træning.
+                Vi lægger ikke træningens forbrænding oveni igen.
+              </p>
               <label className="p-check">
                 <input
                   type="checkbox"
@@ -383,11 +482,11 @@ export default function Onboarding({
                 energiberegningen. Jeg kan vælge portioner og fjerne
                 oplysningerne igen.
               </label>
-              {energy(p) && (
+              {calculation && (
                 <p className="p-notice">
-                  {energy(p)?.available
-                    ? `Skøn: ca. ${energy(p)?.kcal} kcal/dag.`
-                    : energy(p)?.explanation}
+                  {calculation.available
+                    ? `Estimeret ligevægt: ${calculation.maintenance} kcal → underskud ${calculation.percent}% / ${calculation.deficit} kcal → mål ${calculation.kcal} kcal. Madplanens faktiske total vises efter aktivering.`
+                    : calculation.explanation}
                 </p>
               )}
             </>
@@ -418,7 +517,7 @@ export default function Onboarding({
             ))}
           </details>
         )}
-        {step === 7 && (
+        {step === 3 && (
           <>
             <div className="p-card summary-card">
               <span className="p-eyebrow">DET HER ER DIN PLAN</span>
@@ -437,13 +536,17 @@ export default function Onboarding({
                   <dd>{labels[p.goal]}</dd>
                 </div>
                 <div>
-                  <dt>Træningstid</dt>
-                  <dd>{p.minutes} min.</dd>
+                  <dt>Styrke / cardio</dt>
+                  <dd>
+                    {p.days} styrkepas á {p.minutes} min. ·{" "}
+                    {p.cardio?.days || 0} cardiopas
+                  </dd>
                 </div>
                 <div>
                   <dt>Kost</dt>
                   <dd>
-                    {labels[p.diet]} · {labels[p.nutrition]}
+                    {labels[p.diet]} · {p.mealCount || 4} måltider ·{" "}
+                    {labels[p.nutrition]}
                   </dd>
                 </div>
               </dl>
@@ -457,6 +560,16 @@ export default function Onboarding({
                   value={p.startDate}
                   onChange={(e) => field("startDate", e.target.value)}
                 />
+              </label>
+            )}
+            {!editing && (
+              <label className="p-check">
+                <input
+                  type="checkbox"
+                  checked={startConfirmed}
+                  onChange={(e) => setStartConfirmed(e.target.checked)}
+                />
+                Jeg vælger {p.startDate} som dag 1 i mit 100-dages forløb.
               </label>
             )}
             <p className="p-note">
@@ -483,15 +596,15 @@ export default function Onboarding({
           )}
           <button
             className="p-button"
-            disabled={busy}
-            onClick={() => save(Math.min(7, step + 1), step === 7)}
+            disabled={busy || (step === 3 && !startConfirmed)}
+            onClick={() => save(Math.min(3, step + 1), step === 3)}
           >
             {busy
               ? "Gemmer…"
-              : step === 7
+              : step === 3
                 ? editing
                   ? "Gem fremtidige ændringer"
-                  : "Aktivér mit forløb"
+                  : "Start mit 100-dages forløb"
                 : "Gem og fortsæt →"}
           </button>
         </div>

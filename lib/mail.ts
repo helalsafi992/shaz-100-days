@@ -32,7 +32,7 @@ function message(kind: string, p: Payload) {
     };
   return {
     subject: "Din ordre hos SHAZ — 100 dage",
-    text: `Tak for dit køb af SHAZ — 100 DAY TRANSFORMATION.\nOrdre: ${p.order}\nSamlet pris: 399,00 DKK. Engangsbetaling. Ingen abonnement.\nSælger: ${p.seller}\nCVR: ${p.cvr}\nAdresse: ${p.address}\nSupport: ${p.support}\nAdgang: 100 kalenderdage fra din valgte, aktive startdato.\nSelvstyret digital træning og kostinspiration for voksne. Ikke 1:1-coaching.\nDu beholder 14 dages fortrydelsesret fra købsdatoen. Anmod om refundering under Profil → Mit køb, eller skriv til support med ordrenummeret.\nVilkår (${p.termsVersion}): ${baseURL()}/terms\n${p.termsText || ""}\nPrivatliv: ${baseURL()}/privacy\nDu modtager dit sikre loginlink i en separat e-mail.`,
+    text: `Tak for dit køb af SHAZ — 100 DAY TRANSFORMATION.\nOrdre: ${p.order}\nSamlet pris: 399,00 DKK. Engangsbetaling. Ingen abonnement.\nSælger: ${p.seller}\nCVR: ${p.cvr}\nAdresse: ${p.address}\nSupport: ${p.support}\nAdgang: 100 kalenderdage fra din valgte, aktive startdato.\nSelvstyret digital træning og kostinspiration for voksne. Ikke 1:1-coaching.\nDu beholder 14 dages fortrydelsesret fra købsdatoen. Anmod om refundering under Profil → Mit køb, eller skriv til support med ordrenummeret.\nVilkår (${p.termsVersion}): ${baseURL()}/terms\n${p.termsText || ""}\nPrivatliv: ${baseURL()}/privacy\nÅbn dit forløb: ${baseURL()}/app. Brug din konto med e-mail og adgangskode. Hvis du tidligere brugte e-maillinks, er den loginmetode fortsat tilgængelig.`,
   };
 }
 export async function deliver(id: string) {

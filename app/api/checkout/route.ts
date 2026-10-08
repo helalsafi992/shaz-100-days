@@ -1,4 +1,4 @@
-import { session } from "@/lib/auth";
+import { accountSession } from "@/lib/auth";
 import { createCheckout } from "@/lib/payments";
 import { sameOrigin, body, failure, rate } from "@/lib/security";
 import { z } from "zod";
@@ -12,16 +12,9 @@ export async function POST(req: Request) {
     z.object({ adult: z.literal(true), terms: z.literal(true) }).parse(
       await body(req),
     );
-    const account = await session(req.headers);
-    const result = await createCheckout(account.user.email);
-    return Response.json(
-      { url: result.url },
-      {
-        headers: {
-          "Set-Cookie": `shaz_checkout=${result.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
-        },
-      },
-    );
+    const account = await accountSession(req.headers);
+    const result = await createCheckout(account.user);
+    return Response.json({ url: result.url });
   } catch (e) {
     return failure(e);
   }
