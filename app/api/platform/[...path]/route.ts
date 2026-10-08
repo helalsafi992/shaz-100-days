@@ -25,6 +25,7 @@ import { profileSchema, localDate, dayNumber, addDays } from "@/lib/profile";
 import { alternatives, Exercise, DayPlan } from "@/lib/training";
 import { catalog, seedContent } from "@/lib/content";
 import { ingredients, suitable, Recipe } from "@/lib/recipes";
+import { saveDraft } from "@/lib/workout-store";
 import { deliver, sendMail } from "@/lib/mail";
 import { missingConfiguration, salesOpen } from "@/lib/payments";
 const id = z.string().min(1).max(100),
@@ -58,6 +59,9 @@ export async function GET(
       };
       for (const table of [
         "shaz_profile",
+        "shaz_meal_days",
+        "shaz_cardio",
+        "shaz_workout_drafts",
         "shaz_days",
         "shaz_meals",
         "shaz_weights",
@@ -253,6 +257,30 @@ export async function POST(
       return Response.json({ ok: true });
     }
     const p = await activePeriod(s.user.id);
+    if (path === "workout-draft") {
+      const v = z
+        .object({
+          id,
+          revision: z.number().int().min(0),
+          timerEnd: z
+            .number()
+            .min(0)
+            .max(Date.now() + 60 * 60 * 1000),
+          sets: z
+            .array(
+              z.object({
+                exercise: id,
+                set: z.number().int().min(1).max(4),
+                reps: z.number().int().min(0).max(100),
+                kg: z.number().min(0).max(500),
+                effort: z.number().min(1).max(10),
+              }),
+            )
+            .max(80),
+        })
+        .parse(input);
+      return Response.json(await saveDraft(s.user.id, v));
+    }
     if (path === "workout") {
       const v = z
         .object({
@@ -268,7 +296,7 @@ export async function POST(
                 effort: z.number().min(1).max(10),
               }),
             )
-            .max(40),
+            .max(80),
         })
         .parse(input);
       const d = await ownedDay(s.user.id, v.id);
@@ -280,9 +308,11 @@ export async function POST(
       if (
         v.sets.some(
           (set) =>
-            !d.plan.exercises.some(
-              (e) => e.id === set.exercise && set.set <= e.sets,
-            ),
+            ![
+              ...d.plan.exercises,
+              ...(d.plan.archivedExercises || []),
+              ...(d.plan.removedExercises || []),
+            ].some((e) => e.id === set.exercise && set.set <= e.sets),
         ) ||
         new Set(v.sets.map((x) => x.exercise + ":" + x.set)).size !==
           v.sets.length
@@ -301,31 +331,63 @@ export async function POST(
       );
       return Response.json({ ok: true });
     }
-    if (path === "swap-exercise") {
-      const v = z.object({ id, exercise: id, replacement: id }).parse(input);
+    if (
+      path === "swap-exercise" ||
+      path === "remove-exercise" ||
+      path === "restore-exercise"
+    ) {
+      const v = z
+        .object({ id, exercise: id, replacement: id.optional() })
+        .parse(input);
       const d = await ownedDay(s.user.id, v.id);
-      if (
-        d.status === "completed" ||
-        Object.keys(d.log).length ||
-        d.scheduled_date < localDate()
-      )
+      if (d.status === "completed" || d.scheduled_date < localDate())
         throw new HttpError(
           409,
           "En historisk eller påbegyndt træning ændres ikke.",
         );
-      const old = d.plan.exercises.find((e) => e.id === v.exercise);
+      const old = [
+        ...d.plan.exercises,
+        ...(d.plan.removedExercises || []),
+      ].find((e) => e.id === v.exercise);
+      if (!old) throw new HttpError(404, "Øvelsen findes ikke.");
+      if (path === "remove-exercise") {
+        d.plan.removedExercises = [...(d.plan.removedExercises || []), old];
+        d.plan.exercises = d.plan.exercises.filter((e) => e.id !== old.id);
+        await db().query(
+          "UPDATE shaz_days SET plan=$3 WHERE id=$1 AND user_id=$2",
+          [v.id, s.user.id, JSON.stringify(d.plan)],
+        );
+        return Response.json({
+          ok: true,
+          message:
+            "Øvelsen er fjernet. En bevægelsesfunktion mangler nu. Vælg selv en erstatning; dine registreringer er bevaret.",
+        });
+      }
       const option =
         old &&
-        alternatives(
+        [
           old,
-          p.data,
-          (await catalog("exercise")) as Exercise[],
-        ).find((e) => e.id === v.replacement);
+          ...alternatives(
+            old,
+            p.data,
+            (await catalog("exercise")) as Exercise[],
+          ),
+        ].find((e) => e.id === v.replacement);
       if (!old || !option)
         throw new HttpError(400, "Alternativet passer ikke til dit udstyr.");
-      d.plan.exercises = d.plan.exercises.map((e) =>
-        e.id === old.id ? { ...e, ...option } : e,
-      );
+      d.plan.archivedExercises = [
+        ...(d.plan.archivedExercises || []).filter((e) => e.id !== old.id),
+        old,
+      ];
+      if (path === "restore-exercise") {
+        d.plan.exercises.push({ ...old, ...option });
+        d.plan.removedExercises = (d.plan.removedExercises || []).filter(
+          (e) => e.id !== old.id,
+        );
+      } else
+        d.plan.exercises = d.plan.exercises.map((e) =>
+          e.id === old.id ? { ...e, ...option } : e,
+        );
       await db().query(
         "UPDATE shaz_days SET plan=$3,updated_at=now() WHERE id=$1 AND user_id=$2",
         [v.id, s.user.id, JSON.stringify(d.plan)],
@@ -369,6 +431,21 @@ export async function POST(
           "SELECT 1 FROM shaz_days WHERE user_id=$1 AND id<>$2 AND plan->>'kind'='workout' AND status<>'skipped' AND scheduled_date BETWEEN $3::date-1 AND $3::date+1",
           [s.user.id, v.id, v.date],
         );
+        const cardio = await c.query(
+          "SELECT plan FROM shaz_cardio WHERE user_id=$1 AND scheduled_date=$2 AND status IN ('planned','completed')",
+          [s.user.id, v.date],
+        );
+        if (
+          cardio.rows.some(
+            (r) =>
+              r.plan.selected.minutes > 20 ||
+              p.data.cardio?.intensity !== "easy",
+          )
+        )
+          throw new HttpError(
+            400,
+            "Den dag har allerede cardio, som ikke passer sammen med styrkepasset. Vælg en restitutionsdag.",
+          );
         if (!rest.rowCount || nearby.rowCount)
           throw new HttpError(
             400,
@@ -397,7 +474,12 @@ export async function POST(
       );
       return Response.json({ ok: true });
     }
-    if (path === "meal") {
+    if (path === "meal" || path === "meal-week")
+      throw new HttpError(
+        409,
+        "Brug den samlede madplan under Mad. Den gamle måltidseditor er erstattet.",
+      );
+    if (path === "meal-legacy-disabled") {
       const v = z
         .object({
           date,
@@ -603,7 +685,15 @@ async function adminAction(req: Request, path: string, input: unknown) {
   if (path === "admin/content") {
     const p = z
       .object({
-        kind: z.enum(["recipe", "exercise", "template", "focus", "help"]),
+        kind: z.enum([
+          "recipe",
+          "exercise",
+          "template",
+          "focus",
+          "help",
+          "nutrition-rule",
+          "cardio-rule",
+        ]),
         id,
         status: z.enum(["draft", "review", "published"]),
         data: z.record(z.string(), z.unknown()),
@@ -680,13 +770,38 @@ async function adminAction(req: Request, path: string, input: unknown) {
   throw new HttpError(404, "Handlingen findes ikke.");
 }
 function validateContent(kind: string, data: unknown) {
-  if (kind === "recipe") {
+  if (kind === "nutrition-rule") {
+    z.object({
+      minMale: z.number().min(1800).max(2400),
+      minFemale: z.number().min(1500).max(2200),
+      maxDeficit: z.number().min(100).max(600),
+      lowBmi: z.number().min(20).max(23),
+      highBmi: z.number().min(25).max(35),
+      maxDeficitHighLoad: z.number().min(0).max(10),
+      aggressiveDays: z.number().int().min(1).max(7),
+      maxAggressiveDays: z.number().int().min(0).max(14),
+      proteinPerKg: z.number().min(0.83).max(2),
+      fiber: z.number().min(25).max(35),
+      minFatPercent: z.number().min(20).max(30),
+      maxFatPercent: z.number().min(30).max(40),
+    }).parse(data);
+  } else if (kind === "cardio-rule") {
+    z.object({
+      weeklyIncrease: z.number().min(0).max(0.05),
+      beginnerStart: z.number().int().min(10).max(20),
+      maxCombinedEasyMinutes: z.number().int().min(10).max(20),
+      maxActiveDays: z.number().int().min(3).max(6),
+    }).parse(data);
+  } else if (kind === "recipe") {
     const r = z
       .object({
         name: z.string().min(3).max(120),
         category: z.enum(["breakfast", "lunch", "dinner", "snack"]),
         minutes: z.number().int().min(1).max(180),
         servings: z.number().min(1).max(12),
+        portionMin: z.number().min(0.25).max(1).optional(),
+        portionMax: z.number().min(1).max(2.5).optional(),
+        maxGrams: z.number().min(250).max(1200).optional(),
         ingredients: z
           .array(z.object({ id, grams: z.number().positive().max(3000) }))
           .min(1)

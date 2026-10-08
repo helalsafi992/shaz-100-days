@@ -12,7 +12,7 @@ export default function Terms() {
           <p className="p-notice">
             Salg er lukket. Vilkårene er et udkast til kundeplatformen og skal
             færdiggøres med virksomhedens oplysninger og juridiske gennemgang
-            før køb åbnes. Demoen på /demo tager ikke betaling.
+            før køb åbnes. Forhåndsvisningen på /preview tager ikke betaling.
           </p>
         )}
         <h2>Produkt og pris</h2>

@@ -10,6 +10,10 @@ export type Recipe = {
   ingredients: { id: string; grams: number }[];
   steps: string[];
   version: number;
+  portionMin?: number;
+  portionMax?: number;
+  maxGrams?: number;
+  image?: string;
 };
 const r = (
   id: string,
@@ -600,6 +604,166 @@ export const recipes: Recipe[] = [
       "Skyl blåbærrene.",
       "Rør chia i yoghurten. Lad stå 10 minutter, hvis du foretrækker bløde frø.",
       "Top med bærrene og servér.",
+    ],
+  ),
+  r(
+    "apple-bircher",
+    "Bircher med æble, yoghurt og peanut",
+    "breakfast",
+    10,
+    1,
+    [
+      ["oats", 90],
+      ["yogurt", 220],
+      ["apple", 100],
+      ["peanut", 25],
+      ["chia", 10],
+    ],
+    [
+      "Riv det vaskede æble groft uden kernehus.",
+      "Rør havre, yoghurt, æble, peanutbutter og chia med 100 g vand.",
+      "Sæt på køl mindst fire timer. Spis inden for to døgn. Aktiv tilberedning er 10 minutter.",
+    ],
+  ),
+  r(
+    "berry-crunch-meal",
+    "Sprød havreskål med bær og mandler",
+    "breakfast",
+    15,
+    1,
+    [
+      ["oats", 90],
+      ["yogurt", 240],
+      ["blueberry", 80],
+      ["almonds", 25],
+      ["chia", 10],
+    ],
+    [
+      "Rist havre og hakkede mandler på en tør pande i 4 minutter. Rør ofte og lad køle.",
+      "Rør chia i yoghurt med lidt vand, og skyl bærrene.",
+      "Fordel den sprøde blanding og blåbærrene over yoghurten. Servér straks.",
+    ],
+  ),
+  r(
+    "banana-oat-bake",
+    "Bagt bananhavre med yoghurt",
+    "breakfast",
+    30,
+    1,
+    [
+      ["oats", 85],
+      ["egg", 50],
+      ["banana", 90],
+      ["yogurt", 180],
+      ["peanut", 20],
+      ["chia", 8],
+    ],
+    [
+      "Tænd ovnen på 180 grader. Mos banan og pisk med æg, peanutbutter, havre, chia og 80 g vand.",
+      "Hæld i en lille ovnfast form og bag cirka 20 minutter, til ægget er gennemtilberedt og midten fast.",
+      "Servér med kold yoghurt. Tilberedningstiden øges ved større forme.",
+    ],
+  ),
+  r(
+    "tofu-peanut-pasta",
+    "Fuldkornspasta med tofu og peanut",
+    "dinner",
+    25,
+    1,
+    [
+      ["pasta", 90],
+      ["tofu", 180],
+      ["pepper", 90],
+      ["spinach", 40],
+      ["peanut", 15],
+      ["oil", 5],
+      ["lemon", 10],
+    ],
+    [
+      "Kog fuldkornspasta efter pakkens anvisning. Gem lidt kogevand.",
+      "Skær tofu og peberfrugt i tern. Steg i olien i 6–8 minutter og vend spinat i.",
+      "Rør peanutbutter og citron med lidt pastavand til sauce. Vend med pasta, tofu og grønt og varm igennem.",
+    ],
+  ),
+  r(
+    "bean-egg-toast",
+    "Bønnetoast med æg og tomat",
+    "lunch",
+    15,
+    1,
+    [
+      ["bread", 120],
+      ["beans", 140],
+      ["egg", 100],
+      ["tomato", 100],
+      ["oil", 7],
+    ],
+    [
+      "Skyl og dræn bønnerne. Mos halvdelen groft og varm alle bønnerne med hakket tomat i en lille gryde.",
+      "Steg æggene i olien, til de er gennemtilberedte, og rist brødet.",
+      "Fordel bønner og æg på brødet. Salt og krydderier efter smag er ikke medregnet.",
+    ],
+  ),
+  r(
+    "tofu-bean-sandwich",
+    "Lun sandwich med tofu og bønner",
+    "lunch",
+    15,
+    1,
+    [
+      ["bread", 120],
+      ["tofu", 140],
+      ["beans", 100],
+      ["tomato", 80],
+      ["spinach", 30],
+      ["oil", 7],
+      ["lemon", 10],
+    ],
+    [
+      "Dup tofu tør og skær i skiver. Steg i olien i 3 minutter på hver side.",
+      "Skyl og dræn bønner, mos med citron og lidt vand. Skyl grøntsagerne.",
+      "Rist brødet og fyld med bønnecreme, varm tofu, tomat og spinat.",
+    ],
+  ),
+  r(
+    "chicken-peanut-bowl",
+    "Kyllingebowl med ris og peanut",
+    "dinner",
+    40,
+    1,
+    [
+      ["rice", 90],
+      ["chicken", 160],
+      ["broccoli", 130],
+      ["carrot", 70],
+      ["peanut", 20],
+      ["oil", 7],
+      ["lemon", 10],
+    ],
+    [
+      "Kog brune ris efter pakkens anvisning. Damp broccolibuketter og gulerodsstykker de sidste 5 minutter.",
+      "Skær kylling i strimler og steg i olie, til den er gennemtilberedt. Følg lokale fødevaresikkerhedsråd for fjerkræ.",
+      "Rør peanutbutter og citron med varmt vand. Fordel ris, grønt og kylling i en skål og hæld saucen over.",
+    ],
+  ),
+  r(
+    "lentil-tofu-pot",
+    "Linsegryde med tofu og fuldkornsbrød",
+    "dinner",
+    35,
+    1,
+    [
+      ["lentils", 65],
+      ["tofu", 140],
+      ["canned-tomato", 160],
+      ["carrot", 60],
+      ["bread", 60],
+      ["oil", 10],
+    ],
+    [
+      "Skyl linser og kog efter pakkens anvisning, til de er møre.",
+      "Skær gulerod og tofu i tern. Steg kort i olie og tilsæt tomat samt lidt vand. Lad simre til guleroden er mør.",
+      "Vend de kogte linser i, varm grundigt og servér med fuldkornsbrød.",
     ],
   ),
 ];

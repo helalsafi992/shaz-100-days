@@ -77,8 +77,8 @@ test("calendar days respect Copenhagen dates across DST and day 101", () => {
   assert.equal(phase(66), "Konsistens");
   assert.equal(phase(86), "Status & næste skridt");
 });
-test("30 recipes, documented nutrition, scaling and exclusions", () => {
-  assert.equal(recipes.length, 30);
+test("38 recipes, documented nutrition, scaling and exclusions", () => {
+  assert.equal(recipes.length, 38);
   for (const cat of ["breakfast", "lunch", "dinner", "snack"])
     assert.ok(recipes.filter((r) => r.category === cat).length >= 6);
   for (const r of recipes) {
@@ -127,7 +127,7 @@ test("calculation is bounded, optional and not changed by one weight", () => {
   };
   const e = energy(p)!;
   assert.equal(e.resting, 1780);
-  assert.equal(e.kcal, 2850);
+  assert.equal(e.kcal, 2848);
   assert.equal(energy({ ...p, age: 70 })?.available, false);
   assert.equal(energy({ ...p, weight: 45 })?.available, false);
   assert.ok(Math.abs(energy({ ...p, goal: "fat-loss" })!.adjustment!) <= 300);

@@ -1,11 +1,15 @@
 import { db, schema } from "./db";
 import { exercises, focuses } from "./training";
+import { nutritionRule } from "./nutrition";
+import { cardioRule } from "./cardio";
 import { recipes } from "./recipes";
 let ready: Promise<void> | undefined;
 export function seedContent() {
   return (ready ??= (async () => {
     await schema();
     const entries = [
+      { kind: "nutrition-rule", id: nutritionRule.id, data: nutritionRule },
+      { kind: "cardio-rule", id: cardioRule.id, data: cardioRule },
       ...exercises.map((x) => ({ kind: "exercise", id: x.id, data: x })),
       ...recipes.map((x) => ({ kind: "recipe", id: x.id, data: x })),
       ...focuses.map((x, i) => ({

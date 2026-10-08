@@ -10,6 +10,8 @@ import {
 } from "./profile";
 import { generatePlan, Exercise, DayPlan } from "./training";
 import { catalog } from "./content";
+import { estimate } from "./nutrition";
+import { weekProblems } from "./cardio";
 import { HttpError } from "./security";
 export async function profile(user: string) {
   const r = await db().query(
@@ -28,6 +30,10 @@ export async function profile(user: string) {
 }
 export async function saveProfile(user: string, data: unknown, step: number) {
   const p = (step < 7 ? profileFields : profileSchema).parse(data);
+  const old = await profile(user);
+  p.deficitReviewUntil = old.data.deficitReviewUntil;
+  p.aggressiveDaysUsed = old.data.aggressiveDaysUsed;
+  if (step >= 7) validatePlanProfile(p);
   if (p.nutrition === "portions") {
     delete p.age;
     delete p.height;
@@ -46,6 +52,7 @@ export async function saveProfile(user: string, data: unknown, step: number) {
 export async function activate(user: string) {
   const old = await profile(user);
   const p = profileSchema.parse(old.data);
+  validatePlanProfile(p);
   if (p.startDate < localDate() || p.startDate > addDays(localDate(), 90))
     throw new HttpError(
       400,
@@ -98,12 +105,16 @@ export async function activate(user: string) {
         ],
       );
   });
+  await (await import("./cardio-store")).syncCardio(user, p, p.startDate);
   await audit(user, "activate", user, { startDate: p.startDate });
 }
 export async function changeFuture(user: string, data: unknown) {
   const old = await profile(user),
     p = profileSchema.parse(data);
   p.startDate = old.start_date || p.startDate;
+  p.deficitReviewUntil = old.data.deficitReviewUntil;
+  p.aggressiveDaysUsed = old.data.aggressiveDaysUsed;
+  validatePlanProfile(p);
   if (p.nutrition === "portions") {
     delete p.age;
     delete p.height;
@@ -145,6 +156,43 @@ export async function changeFuture(user: string, data: unknown) {
         ],
       );
   });
+  await (
+    await import("./cardio-store")
+  ).syncCardio(user, p, addDays(localDate(), 1));
+  const rs = await catalog("recipe");
+  const { makeMealDay } = await import("./meal-plan");
+  const hasMeals = await db().query(
+    "SELECT 1 FROM shaz_meal_days WHERE user_id=$1 LIMIT 1",
+    [user],
+  );
+  if (hasMeals.rowCount) {
+    const rule = await (
+      await import("./planning-store")
+    ).requirePlanningRules();
+    await transaction(async (c) => {
+      const rows = await c.query(
+        "SELECT date::text,data FROM shaz_meal_days WHERE user_id=$1 AND date>=$2 FOR UPDATE",
+        [user, localDate()],
+      );
+      for (const d of rows.rows)
+        await c.query(
+          "UPDATE shaz_meal_days SET data=$3,version=version+1 WHERE user_id=$1 AND date=$2",
+          [
+            user,
+            d.date,
+            JSON.stringify(
+              makeMealDay(
+                p,
+                d.date,
+                rs as import("./recipes").Recipe[],
+                d.data,
+                rule,
+              ),
+            ),
+          ],
+        );
+    });
+  }
   await audit(user, "change_future_plan", user);
 }
 export async function snapshot(user: string) {
@@ -181,6 +229,14 @@ export async function snapshot(user: string) {
   const help = await catalog("help");
   return {
     help,
+    accountId: user,
+    drafts: (
+      await db().query(
+        "SELECT day_id,data,revision,updated_at FROM shaz_workout_drafts WHERE user_id=$1",
+        [user],
+      )
+    ).rows,
+    cardio: await (await import("./cardio-store")).cardioRows(user),
     profile: p,
     day: p.start_date ? dayNumber(p.start_date) : 0,
     today: localDate(),
@@ -238,4 +294,14 @@ export async function activePeriod(user: string) {
       "Registrering er tilgængelig i dine 100 aktive dage. Dit overblik bevares.",
     );
   return p;
+}
+
+function validatePlanProfile(p: Profile) {
+  const issues = weekProblems(p);
+  if (issues.length) throw new HttpError(400, issues.join(" "));
+  if (p.nutrition === "calculated") {
+    const e = estimate(p, localDate());
+    if (!e.available || !e.allowed)
+      throw new HttpError(400, e.available ? e.reason : e.explanation);
+  }
 }

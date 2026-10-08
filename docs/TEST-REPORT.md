@@ -1,40 +1,27 @@
-# Testleverance — 8. oktober 2026
+# Verificeret testleverance — 8. oktober 2026
 
-## Afprøvet
+10 domænegrupper og 23 integrationsgrupper består. `npm run typecheck`, `npm test`, `npm run build` og `npm run test:integration` er kørt. Maskinlæsbare resultater: [integrated-test-results.json](integrated-test-results.json).
 
-- TypeScript typecheck og optimeret Next.js production build.
-- 5 automatiserede domænetests: alle 12 varianter, præcis 100 dage, udstyrsmatch, faser, sommertid/vintertid, dag 101, 30 opskrifter, dokumenterede næringsværdier, portionsskalering, indkøbsaggregering, kostudelukkelser, energiskøn og præstationsbaserede forslag.
-- 17 integrationsgrupper mod en isoleret PostgreSQL-database og en faktisk Next.js production-proces. Det maskinlæsbare resultat findes i [test-results.json](test-results.json).
-
-| Område | Verifikation |
+| Accepttest | Resultat og konkret afprøvning |
 | --- | --- |
-| Tre kunderejser | Hjemme/begynder, center/let øvet og vegetarisk. Betalingsfixture → automatisk mailopsamling → Better Auth-verifikation → gemt onboarding → aktivering → logget træning |
-| Stripe-kontrakt | Signatur, beløb, valuta, produkt/price, paid-status og miljø; afviste/ubetalte sessioner giver ingen ordre; gentagne hændelser giver én ordre og én første loginmail |
-| Login | Engangsbrug, udløb, genudsendelse, anden session/enhed og faktisk browser-login |
-| Adgang | Afvisning uden session/køb, andet kunde-ID, forkert Origin og manglende adminrolle |
-| Kost | Vegetariske filtre, afvist uegnet bytte, portionsændring, ugentlig plan, favoritter og gemt indkøbsafkrydsning |
-| Planændringer | Historiske pas bevares; check-in-forslag kræver accept; gentagen accept afvises |
-| Betalingsstatus | Refundering og indsigelse lukker produktadgang; ordreoplysninger forbliver tilgængelige; vundet indsigelse kan genåbne |
-| Administration | Invitation til den rigtige verificerede e-mail, ejerrolle, versionering, eksplicit publiceringsbekræftelse og auditspor |
-| Backup/restore | Fysisk snapshot af isoleret PostgreSQL indlæst i en separat instans; 300 programdage og ordredata sammenlignet |
-| Browser | 390 px mobil og 1440 px desktop; landing, checkout, login, demo, dashboard, træning, mad, fremgang og profil uden vandret overflow eller klientundtagelser |
-| Interaktion | Træningseditor, pausetimer, rettelse af registrering, opskriftsdialog, portionsvalg, adminindhold og offentlige previewbilleder |
-| Persistens | Refresh, logout, anden session samt stop/genstart af Next.js-processen bevarer serverdata |
-| Adgangsudløb | Dag 101 viser opsummering, giver ingen automatisk betaling og afviser nye registreringer |
-| Mail-webhook | Signerede Resend-fixtures, ugyldig signatur, idempotent leveringstid og bevaret bounce-suppression |
-| Datarettigheder | Egen dataeksport, kontosletning/cascade og særskilt bevaret ordredokumentation |
+| A | Almindelig Better Auth-konto på isoleret Railway-staging; API-login og100programdage verificeret. Lokal faktisk browser tester password-login og hele det samme kundeområde. |
+| B | 2400→2160/2040/1920/1800; server afviser alder, graviditet, medicinske behov, spiseforstyrrelsesproblematik, lav vægt, for lavt indtag, for stort underskud og høj belastning. Aggressiv periode og reglernes version indgår. |
+| C | Preview+confirm skifter2/3/4/5/6måltider uden utilsigtet ændring af mål. Kostendpoint kan ikke ændre træningsdage. |
+| D | Tre forskellige forslag pr. understøttet plads; kun valgtret medregnes. Stramme filtre viser en konkret begrænsning. |
+| E | Byt, portion, fjern, tomplads og fortryd afprøvet mod database og i mobilbrowser. Indkøbsgram/energi/protein følger valget. Spist historik låses og bevares ved ny fordeling. |
+| F | 9.801 komplette kombinationer fra3kostprofiler ×5måltidsantal ×3energiniveauer samt alle3^Nvalg. Automatisk energi indenfor5 % og ingrediensberegnede makroer. |
+| G | Kostudelukkelser kontrolleres i generator og serverbytte; vegetar afviser fisk/kylling. Ingen filterbrud for at opnå tre retter. |
+| H | 12styrkevarianter, udstyr/niveau/fravalg,cardiodage og alternativer, restitutionskontrol, ingen kaloriekompensation. Forkert samlet belastning afvises. |
+| I | Serverkladde med revision; konflikt409. Øvelsesbytte bevarer sæt. Faktisk mobilbrowser: offlineændring→luk→online→refresh→gem→bytte→refresh; reps13bevaret. |
+| J | Mobil password-login→kostændring→logout→nyt browsercontext→login; gemteplaner identiske. Appprocesgenstart bevarer konti, ordrer, session og logs. |
+| K | Chromium390×844 med touch-emulering og1440desktop; ingen vandret overflow eller klientundtagelser. Formularer, inputfokus, Tab/Escape/dialogfokus, måltidsvalg, navigation og træningseditor afprøvet. Ikke en fysisk iPhone/Safari-test. |
+| L | Konto udenkøb afvises; CSRF, andre kunde-ID'er, adminrolle, forkerttestprojekt/origin/liveflag afvises. Ingen klientsideadgangsbypass. |
+| M | Aktiveringsdato styrer dag1;100dage og CopenhagenDST; dag101viser opsummering og afviser writes. Ingen automatisk abonnementsbetaling. |
 
-## Afgrænsning — dette er ikke påstået gennemført
+Derudover: password-signup/e-mailbekræftelse/reset og tilbagekaldte sessioner; bevarede magic links; signeret Stripe- og Resend-kontrakt/idempotens; refund/dispute-adgang; admininvitation og versionsgodkendelse; fysisk restore af isoleretPostgreSQL; dataeksport og slettecascade.
 
-1. **Faktisk Stripe-testkonto:** Ingen Stripe-nøgler var tilgængelige. Tests bruger signerede lokale event-fixtures og en injiceret sessionhentning, ikke en rigtig Checkout-betaling. Ingen rigtige betalingskort er brugt. Test faktisk succes, afvist kort, afbrudt Checkout, forsinket betaling og refundering efter opsætning.
-2. **Faktisk mailmodtagelse:** Mail er opsamlet krypteret i den isolerede testdatabase. Verificeret SHAZ-afsender, Resend-nøgle og rigtig modtagelse/inbox/spam skal kontrolleres. Et andet projekts domæne er ikke genbrugt.
-3. **Railway-produktionsrestore:** Det isolerede restore er gennemført. Backupplan og restore af den konkrete Railway-database/videovolumen skal afprøves separat. Ingen eksisterende database er flyttet eller nulstillet.
-4. **Rigtige ejer-/kundekonti:** Der er ikke udstedt en offentlig gratis adgang eller oprettet en administrator ud fra den første tilmelding. Ejerens adresse og fungerende afsender skal være klar før invitation.
-5. **Faglig/juridisk review:** Startindholdet er markeret `review`. Ingen klinisk validering eller professionel godkendelse er opfundet. Virksomhedsdata, DPA/overførsler, retention og handelsvilkår er lanceringsgates.
-6. **Shaz-videoer:** Upload og beskyttet afspilning er implementeret og vedvarende lager er oprettet. Originale videoer er ikke leveret; tekstforklaringer bruges. Faktiske videofiler/codec-afspilning skal kontrolleres ved første upload.
+## Afgrænsning
 
-## Gentagelse
+Browserbilleder er fra den faktisk indloggede, lokalt kørte production-build med fiktive konti. Railway har separat almindelig passwordtest og konkret deploymentskontrol. De to testmiljøer forveksles ikke. Testbetalinger og mails er signerede/opsamlede fixtures, ikke faktisk StripeCheckout eller inboxlevering. Lokal backuprestore er ikke Railway-produktionsrestore. Faglige regler er endnu review; alle mikronæringsstoffer er ikke valideret. Se [LAUNCH.md](LAUNCH.md) og [NUTRITION-POLICY.md](NUTRITION-POLICY.md).
 
-`npm ci && npm run typecheck && npm test && npm run build && npm run test:integration`
-
-Integrationstest opretter sin egen database og egne fiktive konti i processen. Den overskriver ikke Railway-variabler eller kundedata og har ingen produktionslogin-bypass. Chromium til lokal UI-verifikation er en dev dependency. Offentlige produktbilleder er faktiske skærmbilleder fra disse fiktive testkonti, tydeligt markeret som sådanne.
+Reproducer: `npm ci && npm run typecheck && npm test && npm run build && npm run test:integration`. Scriptet opretter sin egen database og fiktive konti; ingen Railway-kundedata ændres.

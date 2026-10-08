@@ -78,6 +78,13 @@ export default function Privacy() {
           analysecookies. Hosting og sikkerhedsfunktioner kan behandle tekniske
           driftsoplysninger. Loginlinks lægges ikke i serverens URL-log.
         </p>
+        <p>
+          Træningskladder gemmes midlertidigt på denne enhed, så en
+          forbindelsesfejl ikke sletter dine sæt. De er knyttet til din konto og
+          dit pas, men giver ikke adgang til platformen. Brug en privat enhed,
+          og ryd webstedets lokale data, hvis du deler eller afleverer den.
+          Synkroniserede registreringer gemmes i din konto.
+        </p>
         <h2>Dine rettigheder</h2>
         <p>
           Du kan få indsigt, rette data, bede om sletning eller begrænsning og i

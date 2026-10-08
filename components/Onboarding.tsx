@@ -7,6 +7,7 @@ import {
   type Profile,
   localDate,
 } from "@/lib/profile";
+import { exercises } from "@/lib/training";
 import { ingredients } from "@/lib/recipes";
 const titles = [
   "Dit mål. Dit udgangspunkt.",
@@ -115,7 +116,7 @@ export default function Onboarding({
         {step === 0 && (
           <>
             <h2>Hvad vil du arbejde mod?</h2>
-            {choices("goal", ["fat-loss", "muscle", "fitness"])}
+            {choices("goal", ["fat-loss", "muscle", "fitness", "maintain"])}
             <h2>Din træningserfaring</h2>
             {choices("level", ["beginner", "intermediate"])}
             <p className="p-note">
@@ -391,6 +392,32 @@ export default function Onboarding({
               )}
             </>
           ))}
+        {step === 1 && (
+          <details>
+            <summary>Øvelser jeg foretrækker at undgå</summary>
+            <p className="p-note">
+              Valgene ændrer fremtidige pas. Hvis en funktion ikke kan dækkes
+              med dit udstyr, beder vi dig justere valgene.
+            </p>
+            {exercises.map((e) => (
+              <label className="p-check" key={e.id}>
+                <input
+                  type="checkbox"
+                  checked={(p.exerciseAvoid || []).includes(e.id)}
+                  onChange={(ev) =>
+                    field(
+                      "exerciseAvoid",
+                      ev.target.checked
+                        ? [...(p.exerciseAvoid || []), e.id]
+                        : (p.exerciseAvoid || []).filter((x) => x !== e.id),
+                    )
+                  }
+                />
+                {e.name}
+              </label>
+            ))}
+          </details>
+        )}
         {step === 7 && (
           <>
             <div className="p-card summary-card">

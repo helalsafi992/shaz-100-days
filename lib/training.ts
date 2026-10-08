@@ -374,6 +374,8 @@ export type DayPlan = {
   minutes: number;
   warmup: string[];
   exercises: PlannedExercise[];
+  archivedExercises?: PlannedExercise[];
+  removedExercises?: PlannedExercise[];
   ruleVersion: string;
   profileVersion: number;
 };
@@ -381,6 +383,7 @@ export function alternatives(e: Exercise, p: Profile, catalog = exercises) {
   return catalog.filter(
     (x) =>
       x.id !== e.id &&
+      !(p.exerciseAvoid || []).includes(x.id) &&
       x.pattern === e.pattern &&
       x.equipment.every(
         (eq) =>
@@ -398,6 +401,7 @@ function choose(
   const options = catalog.filter(
     (e) =>
       e.pattern === pattern &&
+      !(p.exerciseAvoid || []).includes(e.id) &&
       e.equipment.every(
         (eq) =>
           eq === "bodyweight" ||

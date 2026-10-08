@@ -1,5 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useWorkoutDraft } from "./useWorkoutDraft";
+import FoodPlanner, { FoodSummary } from "./FoodPlanner";
+import CardioPlanner, { type CardioRow } from "./CardioPlanner";
 import { labels, energy, addDays, type Profile } from "@/lib/profile";
 import {
   nutrients,
@@ -38,6 +41,14 @@ type Meal = {
   recipe: Recipe;
 };
 export type PlatformState = {
+  accountId?: string;
+  drafts?: {
+    day_id: string;
+    data: { sets: SetLog[]; timerEnd: number };
+    revision: number;
+    updated_at: string;
+  }[];
+  cardio?: CardioRow[];
   help?: { id: string; text: string }[];
   profile: { data: Profile; start_date: string };
   day: number;
@@ -84,6 +95,16 @@ export default function Portal({
   const p = state.profile.data;
   const complete = state.days.filter((d) => d.status === "completed");
   const today = state.days.find((d) => d.scheduled_date === state.today);
+  const cardioToday = (state.cardio || []).find(
+    (c) =>
+      c.scheduled_date === state.today &&
+      c.status !== "removed" &&
+      c.status !== "skipped",
+  );
+  async function refreshState() {
+    const r = await fetch("/api/platform/state", { cache: "no-store" });
+    if (r.ok) setState(await r.json());
+  }
   const ended = state.day > 100;
   const future = state.day < 1;
   const weekMeals = state.meals.filter(
@@ -169,34 +190,15 @@ export default function Portal({
         )}
         {view === "today" && (
           <>
-            <div className="p-page-heading">
-              <div>
-                <span className="p-eyebrow">
-                  {future
-                    ? "DIN STARTDATO · " + fmt(state.profile.start_date)
-                    : ended
-                      ? "DIT FORLØB ER AFSLUTTET"
-                      : `DAG ${state.day} AF 100 · ${today?.plan.phase || ""}`}
-                </span>
-                <h1>
-                  {future
-                    ? "Din plan venter på dig."
-                    : ended || state.day === 100
-                      ? "100 dage. Og videre."
-                      : "Én god dag ad gangen."}
-                </h1>
-                <p>
-                  {ended
-                    ? "Se tilbage på det, du har registreret. Ingen ny betaling. Intet nyt forløb starter automatisk."
-                    : future
-                      ? "Dag 1 starter på den dato, du har valgt. Indtil da kan du lære planen at kende."
-                      : today?.plan.focus}
-                </p>
-              </div>
-              <div className="day-orbit">
-                <b>{Math.min(100, Math.max(0, state.day))}</b>
-                <span>AF 100 DAGE</span>
-              </div>
+            <div className="today-heading">
+              <span className="p-eyebrow">
+                {future
+                  ? `STARTER ${fmt(state.profile.start_date)}`
+                  : ended
+                    ? "FORLØBET ER AFSLUTTET"
+                    : `DAG ${state.day} AF 100 · UGE ${Math.min(15, Math.ceil(state.day / 7))}`}
+              </span>
+              <h1>{ended ? "Dit forløb i overblik." : "I dag."}</h1>
             </div>
             <div className="p-grid">
               <section className="p-card primary-card">
@@ -210,7 +212,9 @@ export default function Portal({
                 <h2>
                   {ended
                     ? `${complete.length} gennemførte træninger.`
-                    : today?.plan.title || "Gør plads til din nye rytme."}
+                    : today?.plan.kind !== "workout" && cardioToday
+                      ? cardioToday.plan.selected.title
+                      : today?.plan.title || "Gør plads til din nye rytme."}
                 </h2>
                 {today?.plan.kind === "workout" ? (
                   <>
@@ -229,7 +233,7 @@ export default function Portal({
                     >
                       {today.status === "completed"
                         ? "Se og ret registrering"
-                        : "Åbn dagens træning →"}
+                        : "Start træning →"}
                     </button>
                   </>
                 ) : (
@@ -237,37 +241,22 @@ export default function Portal({
                     <p>
                       {ended || state.day === 100
                         ? "Vælg to vaner, du vil fortsætte med. Sammenlign dine første og seneste registreringer i Fremgang. Du behøver ikke sætte en personlig rekord for at afslutte godt."
-                        : "En hviledag er en del af planen. Tag eventuelt en behagelig gåtur og giv kroppen tid til at komme sig. Du skal ikke indhente et pas i dag."}
+                        : cardioToday
+                          ? `${cardioToday.plan.selected.minutes} minutters cardio. ${cardioToday.plan.selected.intensity}`
+                          : "En restitutionsdag er en del af planen. Du skal ikke indhente et misset pas i dag."}
                     </p>
                     <a
                       className="p-button"
-                      href={ended ? "/app/progress" : "/app/training"}
+                      href={ended ? "/app/progress" : "/app/training#cardio"}
                     >
-                      {ended ? "Se din registrerede fremgang" : "Se din uge →"}
+                      {ended
+                        ? "Se din registrerede fremgang"
+                        : "Se dagens plan →"}
                     </a>
                   </>
                 )}
               </section>
-              <section className="p-card">
-                <span className="p-eyebrow">MAD I DIN HVERDAG</span>
-                <h2>En plan til køleskabet.</h2>
-                <p>
-                  {state.meals.filter((m) => m.date === state.today).length
-                    ? "Dagens valgte måltider:"
-                    : "Vælg måltider, du kan lide. Madplanen er inspiration, ikke en automatisk kaloriefordelt diæt."}
-                </p>
-                {state.meals
-                  .filter((m) => m.date === state.today)
-                  .map((m) => (
-                    <div className="p-list-row" key={m.id}>
-                      <span>{category[m.slot]}</span>
-                      <b>{m.recipe.name}</b>
-                    </div>
-                  ))}
-                <a className="p-secondary" href="/app/food">
-                  Åbn madplan & opskrifter →
-                </a>
-              </section>
+              {!ended && <FoodSummary today={state.today} />}
             </div>
             <div className="p-metrics">
               <div>
@@ -303,8 +292,19 @@ export default function Portal({
                   .slice(0, 7)
                   .map((d) => (
                     <button
-                      disabled={d.plan.kind !== "workout"}
-                      onClick={() => setSelected(d)}
+                      disabled={
+                        d.plan.kind !== "workout" &&
+                        !(state.cardio || []).some(
+                          (c) =>
+                            c.scheduled_date === d.scheduled_date &&
+                            c.status !== "removed",
+                        )
+                      }
+                      onClick={() =>
+                        d.plan.kind === "workout"
+                          ? setSelected(d)
+                          : location.assign("/app/training#cardio")
+                      }
                       key={d.id}
                       className={
                         d.status === "completed"
@@ -319,10 +319,22 @@ export default function Portal({
                         {d.status === "completed"
                           ? "✓"
                           : d.plan.kind === "workout"
-                            ? "Træning"
+                            ? (state.cardio || []).some(
+                                (c) =>
+                                  c.scheduled_date === d.scheduled_date &&
+                                  c.status !== "removed",
+                              )
+                              ? "Styrke + let cardio"
+                              : "Træning"
                             : d.plan.kind === "finish"
                               ? "Status"
-                              : "Hvile"}
+                              : (state.cardio || []).some(
+                                    (c) =>
+                                      c.scheduled_date === d.scheduled_date &&
+                                      c.status !== "removed",
+                                  )
+                                ? "Cardio"
+                                : "Hvile"}
                       </b>
                       <small>Dag {d.day}</small>
                     </button>
@@ -335,7 +347,7 @@ export default function Portal({
           <>
             <PageHeading
               eyebrow="DIN TRÆNING"
-              title="Følg planen. Find din rytme."
+              title="Din ugeplan."
               text="Hvert pas har en rækkefølge og en grund. Hviledage tæller med i de 100 dage."
             />
             <div className="p-pills">
@@ -344,6 +356,17 @@ export default function Portal({
               <span>{p.days} dage / uge</span>
               <span>{p.minutes} min. / pas</span>
             </div>
+            <p>
+              <a className="p-secondary" href="/onboarding?edit=1">
+                Tilpas styrke, udstyr og ugerytme
+              </a>
+            </p>
+            <CardioPlanner
+              profile={p}
+              rows={state.cardio || []}
+              today={state.today}
+              refresh={refreshState}
+            />
             <div className="training-weeks">
               {Array.from({ length: 15 }, (_, i) => i + 1).map((week) => (
                 <details
@@ -404,150 +427,20 @@ export default function Portal({
           </>
         )}
         {view === "food" && (
-          <>
-            <PageHeading
-              eyebrow="MAD & PLANLÆGNING"
-              title="God mad. Mindre gætteri."
-              text="Opskrifter til almindelige dage. Vælg, byt og saml indkøbet ét sted."
-            />
-            <div className="p-card nutrition-note">
-              <h2>
-                {p.nutrition === "portions"
-                  ? "Din tilgang: portioner"
-                  : energy(p)?.available
-                    ? `Dit energiskøn: ca. ${energy(p)?.kcal} kcal/dag`
-                    : "Portionsvejledning"}
-              </h2>
-              <p>
-                {p.nutrition === "calculated"
-                  ? energy(p)?.explanation
-                  : "Sæt et hovedmåltid sammen af grøntsager, en proteinkilde, kartofler/fuldkorn og lidt fedt. Brug portionerne som udgangspunkt og justér efter sult og mæthed."}
-              </p>
-              <small>
-                Madplanen fordeler ikke automatisk dette energiskøn.
-                Næringsværdier er beregnede estimater; opskrifter er ikke en
-                individuel diæt.
-              </small>
-            </div>
-            <section className="p-card">
-              <div className="p-section-head">
-                <div>
-                  <span className="p-eyebrow">DIN UGENTLIGE MADPLAN</span>
-                  <h2>Gør hverdagen nemmere.</h2>
-                </div>
-                <label>
-                  Ugen starter
-                  <input
-                    type="date"
-                    value={weekStart}
-                    onChange={(e) => setWeekStart(e.target.value)}
-                  />
-                </label>
-              </div>
-              <button
-                className="p-secondary"
-                disabled={busy || ended || future}
-                onClick={() => action("meal-week", { start: weekStart })}
-              >
-                Fyld ledige måltider med passende opskrifter
-              </button>
-              <p className="p-note">
-                Eksisterende valg bevares. Ved stramme filtre kan nogle måltider
-                stå tomme.
-              </p>
-              <div className="meal-week">
-                {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(
-                  (date) => (
-                    <div key={date}>
-                      <h3>{fmt(date)}</h3>
-                      {Object.keys(category).map((slot) => (
-                        <MealPicker
-                          key={slot}
-                          date={date}
-                          slot={slot}
-                          meal={weekMeals.find(
-                            (m) => m.date === date && m.slot === slot,
-                          )}
-                          options={state.recipes.filter(
-                            (r) =>
-                              r.category === slot &&
-                              suitable(r, p.diet, p.avoid, p.cookTime),
-                          )}
-                          disabled={
-                            busy || date < state.today || ended || future
-                          }
-                          action={action}
-                        />
-                      ))}
-                    </div>
-                  ),
-                )}
-              </div>
-            </section>
-            <FoodLibrary
-              state={state}
-              action={action}
-              busy={busy || ended || future}
-            />
-            <section className="p-card">
-              <span className="p-eyebrow">FRA DIN VALGTE UGE</span>
-              <h2>Indkøbslisten.</h2>
-              <p>
-                Samlet efter råvare. Mængderne følger opskrifternes rå/drænede
-                vægt; emballager kan kræve større køb.
-              </p>
-              {weekMeals.length === 0 ? (
-                <p className="p-empty">
-                  Vælg måltider ovenfor, så kommer listen her.
-                </p>
-              ) : (
-                <div className="shopping-grid">
-                  {shoppingList(weekMeals).map((i) => {
-                    const checked = state.shopping.some(
-                      (s) =>
-                        s.week === weekStart &&
-                        s.ingredient_id === i.id &&
-                        s.checked,
-                    );
-                    return (
-                      <label
-                        className={
-                          "shopping-item " + (checked ? "checked" : "")
-                        }
-                        key={i.id}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={busy || ended}
-                          onChange={(e) =>
-                            action("shopping", {
-                              week: weekStart,
-                              id: i.id,
-                              on: e.target.checked,
-                            })
-                          }
-                        />
-                        <span>
-                          <b>{i.name}</b>
-                          <small>{i.basis}</small>
-                        </span>
-                        <strong>
-                          {i.grams >= 1000
-                            ? `${(i.grams / 1000).toFixed(2)} kg`
-                            : `${i.grams} g`}
-                        </strong>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-              <p className="p-note">
-                Sæt flueben ved det, du allerede har hjemme. Dit valg gemmes på
-                kontoen.
-              </p>
-            </section>
-          </>
+          <FoodPlanner
+            onChange={refreshState}
+            today={state.today}
+            recipes={state.recipes}
+            shopping={state.shopping}
+            action={action}
+            library={
+              <FoodLibrary
+                state={state}
+                action={action}
+                busy={busy || ended || future}
+              />
+            }
+          />
         )}
         {view === "progress" && (
           <>
@@ -644,6 +537,22 @@ export default function Portal({
                   </details>
                 ))
               )}
+            </section>
+            <section className="p-card">
+              <h2>Registreret cardio.</h2>
+              {(state.cardio || [])
+                .filter((c) => c.status === "completed")
+                .map((c) => (
+                  <div className="p-list-row" key={c.id}>
+                    <span>
+                      {fmt(c.scheduled_date)} · {c.plan.selected.title}
+                    </span>
+                    <b>
+                      {c.log.minutes} min. · RPE {c.log.effort}
+                      {c.log.distance ? ` · ${c.log.distance} km` : ""}
+                    </b>
+                  </div>
+                ))}
             </section>
             <section className="p-card">
               <h2>100 dage, én oversigt.</h2>
@@ -1019,23 +928,34 @@ function Workout({
   action: Action;
   close: () => void;
 }) {
-  const [sets, setSets] = useState<SetLog[]>(
-      day.log.sets ||
-        day.plan.exercises.flatMap((e) =>
-          Array.from({ length: e.sets }, (_, i) => ({
-            exercise: e.id,
-            set: i + 1,
-            reps: 0,
-            kg: 0,
-            effort: 7,
-          })),
-        ),
-    ),
-    [end, setEnd] = useState(0),
-    [remaining, setRemaining] = useState(0),
-    [move, setMove] = useState("");
   const readonly =
     state.day > 100 || day.scheduled_date > state.today || state.day < 1;
+  const savedDraft = state.drafts?.find((d) => d.day_id === day.id);
+  const startSets = [...(savedDraft?.data.sets || day.log.sets || [])];
+  for (const e of day.plan.exercises)
+    for (let i = 1; i <= e.sets; i++)
+      if (!startSets.some((s) => s.exercise === e.id && s.set === i))
+        startSets.push({ exercise: e.id, set: i, reps: 0, kg: 0, effort: 7 });
+  const {
+    sets,
+    setSets,
+    end,
+    setEnd,
+    status: saveStatus,
+    conflict,
+    resolve,
+    flush,
+  } = useWorkoutDraft(
+    day.id,
+    state.accountId || "",
+    startSets,
+    savedDraft
+      ? { ...savedDraft, data: { ...savedDraft.data, sets: startSets } }
+      : undefined,
+    readonly,
+  );
+  const [remaining, setRemaining] = useState(0),
+    [move, setMove] = useState("");
   useEffect(() => {
     const t = setInterval(
       () => setRemaining(Math.max(0, Math.ceil((end - Date.now()) / 1000))),
@@ -1066,6 +986,75 @@ function Workout({
         </span>
         <h2>{day.plan.title}</h2>
         <p>{day.plan.focus}</p>
+        <p className="draft-status" role="status">
+          {saveStatus}
+        </p>
+        {conflict && (
+          <div className="p-notice">
+            <p>
+              En anden session har ændret kladden. Intet overskrives uden dit
+              valg.
+            </p>
+            <div className="p-actions">
+              <button className="p-secondary" onClick={() => resolve(false)}>
+                Hent serverens kladde
+              </button>
+              <button className="p-secondary" onClick={() => resolve(true)}>
+                Behold min lokale kladde
+              </button>
+            </div>
+          </div>
+        )}
+        {(day.plan.archivedExercises || [])
+          .filter((e) => sets.some((s) => s.exercise === e.id && s.reps > 0))
+          .map((e) => (
+            <details key={e.id}>
+              <summary>Bevarede sæt: {e.name}</summary>
+              {sets
+                .filter((s) => s.exercise === e.id && s.reps > 0)
+                .map((s) => (
+                  <p key={s.set}>
+                    Sæt {s.set}: {s.reps} × {s.kg} kg · RPE {s.effort}
+                  </p>
+                ))}
+            </details>
+          ))}
+        {(day.plan.removedExercises || []).map((e) => (
+          <section className="p-notice" key={e.id}>
+            <h3>En øvelsesplads er tom.</h3>
+            <p>
+              Du har fjernet {e.name}. Bevægelsesfunktionen {e.pattern} mangler
+              her. Du vælger selv, om den skal erstattes.
+            </p>
+            <select
+              aria-label={"Erstat " + e.name}
+              value=""
+              disabled={busy || readonly}
+              onChange={async (ev) => {
+                const replacement = ev.target.value;
+                if (
+                  replacement &&
+                  (await flush()) &&
+                  (await action("restore-exercise", {
+                    id: day.id,
+                    exercise: e.id,
+                    replacement,
+                  }))
+                )
+                  close();
+              }}
+            >
+              <option value="">Vælg en erstatning</option>
+              {[e, ...alternatives(e, state.profile.data, state.exercises)].map(
+                (o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ),
+              )}
+            </select>
+          </section>
+        ))}
         <p className="p-note">
           {state.help?.find((h) => h.id === "safety")?.text}
         </p>
@@ -1184,44 +1173,72 @@ function Workout({
                     </div>
                   ),
               )}
+              {options.length < 2 && (
+                <p className="p-note">
+                  Der findes {options.length} egnet alternativ til denne
+                  funktion og dit udstyr. Vi viser ikke uegnede erstatninger for
+                  at nå tre valg.
+                </p>
+              )}
               <div className="p-actions">
+                {day.status !== "completed" && (
+                  <button
+                    className="p-secondary"
+                    disabled={busy || readonly}
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          "Fjern øvelsen? Funktionen vil mangle i passet, og dine registrerede sæt bevares.",
+                        ) &&
+                        (await flush()) &&
+                        (await action("remove-exercise", {
+                          id: day.id,
+                          exercise: e.id,
+                        }))
+                      )
+                        close();
+                    }}
+                  >
+                    Fjern øvelse
+                  </button>
+                )}
                 <button
                   className="p-secondary"
                   onClick={() => setEnd(Date.now() + e.rest * 1000)}
                 >
                   Pause · {e.rest} sek.
                 </button>
-                {options.length > 0 &&
-                  day.status !== "completed" &&
-                  !day.log.sets && (
-                    <select
-                      aria-label={"Byt " + e.name}
-                      value=""
-                      disabled={
-                        busy ||
-                        state.day > 100 ||
-                        day.scheduled_date < state.today
-                      }
-                      onChange={async (ev) => {
-                        if (
-                          ev.target.value &&
-                          (await action("swap-exercise", {
-                            id: day.id,
-                            exercise: e.id,
-                            replacement: ev.target.value,
-                          }))
-                        )
-                          close();
-                      }}
-                    >
-                      <option value="">Byt øvelse…</option>
-                      {options.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                {options.length > 0 && day.status !== "completed" && (
+                  <select
+                    aria-label={"Byt " + e.name}
+                    value=""
+                    disabled={
+                      busy ||
+                      state.day > 100 ||
+                      day.scheduled_date < state.today
+                    }
+                    onChange={async (ev) => {
+                      const replacement = ev.target.value;
+                      if (
+                        replacement &&
+                        (await flush()) &&
+                        (await action("swap-exercise", {
+                          id: day.id,
+                          exercise: e.id,
+                          replacement,
+                        }))
+                      )
+                        close();
+                    }}
+                  >
+                    <option value="">Byt øvelse…</option>
+                    {options.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </section>
           );
@@ -1253,9 +1270,7 @@ function Workout({
           <button
             className="p-secondary"
             disabled={busy || readonly}
-            onClick={() =>
-              action("workout", { id: day.id, sets, complete: false })
-            }
+            onClick={() => flush()}
           >
             Gem sæt
           </button>
@@ -1263,7 +1278,10 @@ function Workout({
             className="p-button"
             disabled={busy || readonly}
             onClick={async () => {
-              if (await action("workout", { id: day.id, sets, complete: true }))
+              if (
+                (await flush()) &&
+                (await action("workout", { id: day.id, sets, complete: true }))
+              )
                 close();
             }}
           >

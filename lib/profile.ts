@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { estimate } from "./nutrition";
 export const profileFields = z.object({
-  goal: z.enum(["fat-loss", "muscle", "fitness"]),
+  goal: z.enum(["fat-loss", "muscle", "fitness", "maintain"]),
   level: z.enum(["beginner", "intermediate"]),
   place: z.enum(["home", "gym"]),
   equipment: z
@@ -14,13 +15,46 @@ export const profileFields = z.object({
   avoid: z.array(z.string().max(40)).max(40),
   cookTime: z.union([z.literal(15), z.literal(30), z.literal(60)]),
   nutrition: z.enum(["portions", "calculated"]),
-  age: z.number().int().min(18).max(100).optional(),
+  age: z.number().int().min(13).max(100).optional(),
   height: z.number().min(130).max(220).optional(),
   weight: z.number().min(40).max(250).optional(),
   sex: z.enum(["female", "male"]).optional(),
   activity: z.enum(["low", "moderate", "high"]).optional(),
   calculationSuitable: z.boolean().optional(),
   dataConsent: z.boolean().optional(),
+  mealCount: z.number().int().min(2).max(6).optional(),
+  mealNames: z.array(z.string().min(1).max(40)).min(2).max(6).optional(),
+  mealTimes: z
+    .array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/))
+    .min(2)
+    .max(6)
+    .optional(),
+  deficitLevel: z.enum(["moderate", "high", "higher", "aggressive"]).optional(),
+  everydayActivity: z.enum(["seated", "moving", "physical"]).optional(),
+  trainingActivity: z.enum(["light", "regular", "heavy"]).optional(),
+  pregnantOrBreastfeeding: z.boolean().optional(),
+  medicalNutrition: z.boolean().optional(),
+  eatingDisorderHistory: z.boolean().optional(),
+  deficitReviewUntil: z.string().optional(),
+  aggressiveDaysUsed: z.number().int().min(0).max(14).optional(),
+  exerciseAvoid: z.array(z.string().max(100)).max(30).optional(),
+  cardio: z
+    .object({
+      days: z.number().int().min(0).max(4),
+      weekdays: z.array(z.number().int().min(0).max(6)).max(4),
+      minutes: z.number().int().min(10).max(60),
+      forms: z
+        .array(z.enum(["walk", "cycle", "walk-run", "elliptical"]))
+        .min(1)
+        .max(4),
+      equipment: z
+        .array(z.enum(["outdoors", "bike", "treadmill", "elliptical"]))
+        .min(1)
+        .max(4),
+      level: z.enum(["beginner", "intermediate"]),
+      intensity: z.enum(["easy", "moderate"]),
+    })
+    .optional(),
   startDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -96,6 +130,7 @@ export const defaults: Profile = {
 };
 export const labels: Record<string, string> = {
   "fat-loss": "Fedttab",
+  maintain: "Vedligeholdelse",
   muscle: "Muskelopbygning",
   fitness: "Bedre form",
   beginner: "Begynder",
@@ -136,39 +171,9 @@ export function dayNumber(start: string, at = new Date()) {
   );
 }
 export function energy(p: Profile) {
-  if (
-    p.nutrition !== "calculated" ||
-    !p.weight ||
-    !p.height ||
-    !p.age ||
-    !p.sex ||
-    !p.activity
-  )
-    return null;
-  const bmi = p.weight / (p.height / 100) ** 2;
-  if (p.age > 64 || bmi < 18.5 || bmi > 35 || !p.calculationSuitable)
-    return {
-      available: false,
-      explanation:
-        "Vælg portionsvejledning. En individuel vurdering er mere relevant end denne generelle beregning.",
-    };
-  const resting =
-    10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "male" ? 5 : -161);
-  const factor = { low: 1.4, moderate: 1.6, high: 1.8 }[p.activity];
-  const maintenance = resting * factor;
-  const adjustment =
-    p.goal === "fat-loss"
-      ? -Math.min(maintenance * 0.1, 300)
-      : p.goal === "muscle"
-        ? Math.min(maintenance * 0.05, 150)
-        : 0;
-  return {
-    available: true,
-    kcal: Math.round((maintenance + adjustment) / 50) * 50,
-    resting: Math.round(resting),
-    factor,
-    adjustment: Math.round(adjustment),
-    explanation:
-      "Mifflin–St Jeor × valgt aktivitetsfaktor. Et skøn, ikke en måling. Ved fedttab højst 10 %/300 kcal under skønnet vedligehold; muskelmål højst 5 %/150 kcal over. Justeres ikke ud fra én vejning.",
-  };
+  if (p.nutrition !== "calculated") return null;
+  const e = estimate(p);
+  if (!e.available)
+    return { ...e, kcal: undefined, adjustment: undefined, resting: undefined };
+  return { ...e, kcal: e.target, adjustment: e.surplus - e.deficit };
 }

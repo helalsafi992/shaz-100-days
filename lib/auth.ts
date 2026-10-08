@@ -27,16 +27,21 @@ function createAuth() {
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, token }) => {
-        await sendMail(user.email, "password-reset", { url: baseURL() + "/login#reset=" + encodeURIComponent(token) });
+        await sendMail(user.email, "password-reset", {
+          url: baseURL() + "/login#reset=" + encodeURIComponent(token),
+        });
       },
     },
     emailVerification: {
-      sendOnSignUp: !isolatedTest(),
+      // The route queues verification after signup commits, avoiding nested DB pool waits.
+      sendOnSignUp: false,
       sendOnSignIn: !isolatedTest(),
       autoSignInAfterVerification: true,
       expiresIn: 3600,
       sendVerificationEmail: async ({ user, token }) => {
-        await sendMail(user.email, "verify-email", { url: baseURL() + "/login#verify=" + encodeURIComponent(token) });
+        await sendMail(user.email, "verify-email", {
+          url: baseURL() + "/login#verify=" + encodeURIComponent(token),
+        });
       },
     },
     advanced: { database: { generateId: () => crypto.randomUUID() } },

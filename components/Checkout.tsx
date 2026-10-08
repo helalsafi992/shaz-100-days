@@ -2,9 +2,11 @@
 import { useState } from "react";
 export default function Checkout({
   open,
+  email,
   cancelled = false,
 }: {
   open: boolean;
+  email?: string;
   cancelled?: boolean;
 }) {
   const [adult, setAdult] = useState(false),
@@ -64,7 +66,17 @@ export default function Checkout({
           træning og generel kostinspiration. Ingen 1:1-coaching eller garanti
           for resultater.
         </p>
-        {open ? (
+        {open && !email ? (
+          <>
+            <p>Opret en konto og bekræft din e-mail, før du køber adgang.</p>
+            <a className="p-button" href="/login?action=signup">
+              Opret konto
+            </a>
+            <a className="p-secondary" href="/login">
+              Jeg har allerede en konto
+            </a>
+          </>
+        ) : open ? (
           <>
             <label className="p-check">
               <input
@@ -93,7 +105,7 @@ export default function Checkout({
                 : "Køb med betalingspligt — 399 kr."}
             </button>
             <p className="p-note">
-              Din e-mail og kortoplysninger indtastes hos Stripe. Vi modtager
+              Din konto-e-mail ({email}) genbruges hos Stripe. Vi modtager
               aldrig dit kortnummer.
             </p>
           </>
@@ -102,7 +114,7 @@ export default function Checkout({
             <p className="p-notice">
               SHAZ er under færdiggørelse. Rigtige køb er endnu ikke åbnet.
             </p>
-            <a className="p-button" href="/demo">
+            <a className="p-button" href="/preview">
               Se præsentationsdemoen →
             </a>
             <a className="p-secondary" href="/login">

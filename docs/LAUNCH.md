@@ -1,6 +1,6 @@
 # Produktionskrav før lancering
 
-**Status: salg lukket.** Der må ikke åbnes rigtige betalinger eller sendes en lanceringskampagne uden ejerens udtrykkelige godkendelse. Den gamle beta er på `/demo`. Den giver ingen kundeadgang.
+**Status: salg lukket.** Der må ikke åbnes rigtige betalinger eller sendes en lanceringskampagne uden ejerens udtrykkelige godkendelse. Den gamle beta er fjernet fra kunderejsen. `/demo` viderestiller til `/preview`. Den fulde testplatform findes på separat staging; se INTEGRATED-PLATFORM.md.
 
 ## Miljøvariabler
 
@@ -42,7 +42,7 @@ Indtastes på Railway → eksisterende SHAZ-appservice → production → Variab
 ## Ejer og faglig gennemgang
 
 - Gennemgå alle 12 programvarianter, alternativer, progression, begrænsninger og de 15 ugefokus. Alle seed-versioner står `review`.
-- Gennemgå de 30 opskrifter, fødevaresikkerhed, rå/drænede vægte, portioner, vegetariske valg og halal-formulering. Datakilder er dokumenteret, men den individuelle egnethed er ikke fagligt godkendt.
+- Gennemgå de 38 opskrifter, fødevaresikkerhed, rå/drænede vægte, portioner, vegetariske valg og halal-formulering. Datakilder er dokumenteret, men den individuelle egnethed er ikke fagligt godkendt.
 - Gennemgå energimetodens målgruppe, sikkerhedsgrænser og den udtrykkelige samtykketekst. Portionsvejledning er standard.
 - Tilføj Shaz' egne videoer; manglende videoer omtales ikke som færdige.
 - Godkend endelig kundekommunikation, start-/adgangsperiode og hjælpetekster.
@@ -56,3 +56,9 @@ Kilder gennemset: [Forbrugeraftaleloven, LBK 1184/2025](https://www.retsinformat
 Den eksisterende app/database er i Railway `us-west2`. Ingen flytning er foretaget. Ejer skal dokumentere dataansvarlig, formål/behandlingsgrundlag, databehandleraftaler, underleverandører, overførselsgrundlag/TIA hvor relevant, sikkerhedsvurdering af kropsdata og konkrete slette-/backupfrister. Der må ikke ske kundeinvitation før dette er afklaret. Se [Datatilsynets vejledning om rettigheder](https://www.datatilsynet.dk/borger/hvad-er-dine-rettigheder).
 
 De offentlige vilkår og privatlivstekster viser tydeligt uafklarede oplysninger. Der er ingen opdigtet virksomhed, CVR, kontaktadresse, faglig certificering, anmeldelse eller før/efter-resultat.
+
+## Nye obligatoriske gates for den integrerede platform
+
+- Faglig godkendelse af NUTRITION-POLICY.md, alle fire underskud, aktivitetsfaktorer, protein/fiber/fedt, portionsgrænser og cardiobelastning. Dokumentér fuld ernæringsmæssig tilstrækkelighed, herunder mikronæringsstoffer, før regler frigives. De er kun åbne for fiktive profiler i isoleret staging.
+- Virkelig signup → e-mailbekræftelse → password-login/reset på en verificeret SHAZ-afsender. Manglende mail blokerer ikke den specifikke, allerede verificerede testkonto.
+- Mobilbrowser er testet ved 390px med touch-emulering; fysisk iPhone/Safari og Android bør indgå i den endelige enhedskontrol.

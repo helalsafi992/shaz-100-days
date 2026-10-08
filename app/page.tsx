@@ -64,7 +64,7 @@ export default function Home() {
               </div>
               <p className="launch-note">
                 Under klargøring · Rigtige køb er endnu ikke åbnet.{" "}
-                <a href="/demo">Prøv demoen</a>
+                <a href="/preview">Prøv demoen</a>
               </p>
               <div className="herochecks">
                 <span>Hjemme eller fitness</span>
@@ -231,7 +231,8 @@ export default function Home() {
               KØB FORLØBET
             </a>
             <small>
-              Salg er lukket under klargøring. Se demoen uden betaling.
+              Salg er lukket under klargøring. Se den faktiske platform i
+              forhåndsvisningen.
             </small>
           </div>
         </section>

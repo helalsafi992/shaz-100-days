@@ -39,6 +39,20 @@ const { saveProfile, activate, snapshot, ownedDay, changeFuture } =
   await import("../lib/platform");
 const { defaults, localDate, addDays } = await import("../lib/profile");
 const { POST, GET } = await import("../app/api/platform/[...path]/route");
+const { POST: PLANPOST } = await import("../app/api/plan/[...path]/route");
+const { mealDays } = await import("../lib/planning-store");
+const { mealShopping } = await import("../lib/meal-plan");
+async function planpost(path: string, data: unknown, h: Headers) {
+  const r = await PLANPOST(
+    new Request(env.APP_URL + "/api/plan/" + path, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify(data),
+    }),
+    { params: Promise.resolve({ path: [path] }) },
+  );
+  return { status: r.status, data: await r.json() };
+}
 const today = localDate(),
   weekday = new Date(today + "T12:00:00Z").getUTCDay();
 const profiles = [
@@ -381,46 +395,51 @@ try {
     "Vegetarian exclusions, meal swap, portions, weekly plan, saved favorites and shopping checks",
     async () => {
       const u = users[2];
-      let r = await post("meal-week", { start: today }, u.headers);
-      assert.equal(r.status, 200, JSON.stringify(r.data));
-      const state = await snapshot(u.id);
-      assert.ok(state.meals.length >= 21);
+      const days = await mealDays(u.id, today);
+      assert.equal(days.length, 7);
       assert.ok(
-        state.meals.every(
-          (m) =>
-            !m.recipe.ingredients.some((i: { id: string }) =>
-              ["chicken", "tuna", "salmon"].includes(i.id),
+        days.every((d) =>
+          d.data.slots.every((s: any) =>
+            s.options.every(
+              (o: any) =>
+                !o.recipe.ingredients.some((i: any) =>
+                  ["chicken", "tuna", "salmon"].includes(i.id),
+                ),
             ),
+          ),
         ),
       );
-      const meal = state.meals.find((m) => m.slot === "breakfast");
-      r = await post(
+      const meal = days[0].data.slots[0];
+      const recipe_id = meal.selected.recipe.id;
+      let r = await planpost(
         "meal",
-        { date: today, slot: "breakfast", recipe: meal.recipe_id, servings: 2 },
+        {
+          date: today,
+          slot: meal.id,
+          action: "portion",
+          servings: 1.2,
+          expectedVersion: days[0].version,
+        },
         u.headers,
       );
-      assert.equal(r.status, 200);
-      assert.equal(
-        Number(
-          (await snapshot(u.id)).meals.find(
-            (m) => m.date === today && m.slot === "breakfast",
-          ).servings,
-        ),
-        2,
+      assert.equal(r.status, 200, JSON.stringify(r.data));
+      let row = (await mealDays(u.id, today, 1))[0];
+      assert.equal(row.data.slots[0].selected.servings, 1.2);
+      r = await planpost(
+        "meal",
+        {
+          date: today,
+          slot: meal.id,
+          action: "choose",
+          recipe: "salmon-tray",
+          servings: 1,
+          expectedVersion: row.version,
+        },
+        u.headers,
       );
+      assert.equal(r.status, 400);
       assert.equal(
-        (
-          await post(
-            "meal",
-            { date: today, slot: "dinner", recipe: "salmon-tray", servings: 1 },
-            u.headers,
-          )
-        ).status,
-        400,
-      );
-      assert.equal(
-        (await post("favorite", { id: meal.recipe_id, on: true }, u.headers))
-          .status,
+        (await post("favorite", { id: recipe_id, on: true }, u.headers)).status,
         200,
       );
       assert.equal(
@@ -599,6 +618,408 @@ try {
       await restored.close();
     },
   );
+
+  await check(
+    "Integrated nutrition: preview/confirm 2–6 meals, server filters, selected totals, remove/undo, consumed history and conflicts",
+    async () => {
+      const u = users[2];
+      const settings = {
+        nutrition: "calculated",
+        goal: "maintain",
+        age: 40,
+        height: 165,
+        weight: 60,
+        sex: "female",
+        activity: "moderate",
+        dataConsent: true,
+        calculationSuitable: true,
+        mealCount: 4,
+        cookTime: 30,
+      };
+      let target = 0;
+      for (const count of [2, 3, 4, 5, 6]) {
+        const body = { settings: { ...settings, mealCount: count, days: 4 } };
+        const preview = await planpost("nutrition-preview", body, u.headers);
+        assert.equal(preview.status, 200, JSON.stringify(preview.data));
+        assert.equal(
+          preview.data.profile.days,
+          3,
+          "Nutrition cannot change training settings",
+        );
+        if (target) assert.equal(preview.data.day.target, target);
+        else target = preview.data.day.target;
+        assert.equal(preview.data.day.slots.length, count);
+        assert.ok(
+          preview.data.day.slots.every((s: any) => s.options.length === 3),
+        );
+        const before = (await snapshot(u.id)).profile.version;
+        assert.equal(
+          before,
+          preview.data.version,
+          "Preview does not mutate profile",
+        );
+        const save = await planpost(
+          "nutrition-confirm",
+          { ...body, expectedVersion: preview.data.version },
+          u.headers,
+        );
+        assert.equal(save.status, 200, JSON.stringify(save.data));
+      }
+      let row = (await mealDays(u.id, today, 1))[0];
+      const slot = row.data.slots[0];
+      const before = mealShopping([row.data]);
+      for (const option of slot.options) {
+        const r = await planpost(
+          "meal",
+          {
+            date: today,
+            slot: slot.id,
+            action: "choose",
+            recipe: option.recipe.id,
+            servings: option.servings,
+            expectedVersion: row.version,
+          },
+          u.headers,
+        );
+        assert.equal(r.status, 200);
+        row = (await mealDays(u.id, today, 1))[0];
+        assert.equal(row.data.slots[0].selected.recipe.id, option.recipe.id);
+      }
+      let r = await planpost(
+        "meal",
+        {
+          date: today,
+          slot: slot.id,
+          action: "remove",
+          expectedVersion: row.version,
+        },
+        u.headers,
+      );
+      assert.equal(r.status, 200);
+      row = (await mealDays(u.id, today, 1))[0];
+      assert.equal(row.data.slots[0].selected, null);
+      assert.equal(row.data.target, target);
+      const removed = mealShopping([row.data]);
+      r = await planpost(
+        "meal",
+        {
+          date: today,
+          slot: slot.id,
+          action: "undo",
+          expectedVersion: row.version,
+        },
+        u.headers,
+      );
+      assert.equal(r.status, 200);
+      row = (await mealDays(u.id, today, 1))[0];
+      assert.ok(row.data.slots[0].selected);
+      assert.ok(
+        mealShopping([row.data]).reduce((n, i) => n + i.grams, 0) >
+          removed.reduce((n, i) => n + i.grams, 0),
+      );
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date: today,
+              slot: slot.id,
+              action: "remove",
+              expectedVersion: row.version - 1,
+            },
+            u.headers,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date: today,
+              slot: slot.id,
+              action: "eaten",
+              expectedVersion: row.version,
+            },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      row = (await mealDays(u.id, today, 1))[0];
+      const eaten = row.data.slots[0];
+      assert.equal(
+        (
+          await planpost(
+            "meal",
+            {
+              date: today,
+              slot: slot.id,
+              action: "remove",
+              expectedVersion: row.version,
+            },
+            u.headers,
+          )
+        ).status,
+        409,
+      );
+      const preview = await planpost(
+        "nutrition-preview",
+        { settings: { mealCount: 3 } },
+        u.headers,
+      );
+      assert.equal(preview.status, 200);
+      assert.deepEqual(
+        preview.data.day.slots.find((s: any) => s.id === eaten.id),
+        eaten,
+      );
+      for (const unsafe of [
+        { age: 16 },
+        { pregnantOrBreastfeeding: true },
+        { medicalNutrition: true },
+        { eatingDisorderHistory: true },
+        { weight: 40 },
+      ])
+        assert.equal(
+          (await planpost("nutrition-preview", { settings: unsafe }, u.headers))
+            .status,
+          400,
+        );
+    },
+  );
+  await check(
+    "Cardio: coherent generation, changes persist, swaps and logs, no extra calories, cross-account isolation",
+    async () => {
+      // Restore this isolated fixture after the preceding refund/revocation test.
+      await db().query("UPDATE shaz_orders SET status='paid' WHERE id=$1", [
+        users[1].order,
+      ]);
+      const u = users[1],
+        cardio = {
+          days: 1,
+          weekdays: [(weekday + 2) % 7],
+          minutes: 20,
+          forms: ["walk", "cycle"],
+          equipment: ["outdoors", "bike"],
+          level: "beginner",
+          intensity: "easy",
+        };
+      const preview = await planpost("cardio-preview", { cardio }, u.headers);
+      assert.equal(preview.status, 200, JSON.stringify(preview.data));
+      assert.equal(preview.data.plan[0].options.length, 3);
+      assert.equal(
+        (
+          await planpost(
+            "cardio-confirm",
+            { cardio, expectedVersion: preview.data.version },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      const state = await snapshot(u.id);
+      let c = state.cardio[0];
+      assert.ok(c);
+      assert.equal(
+        (
+          await planpost(
+            "cardio",
+            { id: c.id, action: "swap", option: c.plan.options[1].id },
+            users[0].headers,
+          )
+        ).status,
+        404,
+      );
+      assert.equal(
+        (
+          await planpost(
+            "cardio",
+            { id: c.id, action: "swap", option: c.plan.options[1].id },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      await db().query("UPDATE shaz_cardio SET scheduled_date=$2 WHERE id=$1", [
+        c.id,
+        today,
+      ]);
+      assert.equal(
+        (
+          await planpost(
+            "cardio",
+            { id: c.id, action: "log", minutes: 18, distance: 1.1, effort: 3 },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      c = (await snapshot(u.id)).cardio.find((d: any) => d.id === c.id);
+      assert.equal(c.log.minutes, 18);
+      assert.equal(c.status, "completed");
+      assert.equal(
+        (await planpost("cardio", { id: c.id, action: "remove" }, u.headers))
+          .status,
+        409,
+      );
+      const invalid = await planpost(
+        "cardio-preview",
+        { cardio: { ...cardio, weekdays: [weekday], intensity: "moderate" } },
+        u.headers,
+      );
+      assert.equal(invalid.status, 400);
+    },
+  );
+  await check(
+    "Workout drafts: server revisions, cross-user protection and sets retained through exercise swap",
+    async () => {
+      const u = users[1];
+      const day = (await snapshot(u.id)).days[0];
+      await db().query("UPDATE shaz_days SET status='planned' WHERE id=$1", [
+        day.id,
+      ]);
+      const old = day.plan.exercises[0];
+      const sets = [{ exercise: old.id, set: 1, reps: 11, kg: 10, effort: 7 }];
+      const r = await post(
+        "workout-draft",
+        { id: day.id, sets, timerEnd: 0, revision: 0 },
+        u.headers,
+      );
+      assert.equal(r.status, 200, JSON.stringify(r.data));
+      assert.equal(
+        (
+          await post(
+            "workout-draft",
+            { id: day.id, sets, timerEnd: 0, revision: 0 },
+            u.headers,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (
+          await post(
+            "workout-draft",
+            { id: day.id, sets, timerEnd: 0, revision: 0 },
+            users[0].headers,
+          )
+        ).status,
+        404,
+      );
+      const { alternatives } = await import("../lib/training");
+      const { catalog } = await import("../lib/content");
+      const options = alternatives(
+        old,
+        profiles[1] as any,
+        (await catalog("exercise")) as any,
+      );
+      assert.ok(options.length);
+      assert.equal(
+        (
+          await post(
+            "swap-exercise",
+            { id: day.id, exercise: old.id, replacement: options[0].id },
+            u.headers,
+          )
+        ).status,
+        200,
+      );
+      const after = await snapshot(u.id);
+      assert.deepEqual(
+        after.drafts.find((d: any) => d.day_id === day.id).data.sets,
+        sets,
+      );
+      assert.ok(
+        after.days[0].plan.archivedExercises.some((e: any) => e.id === old.id),
+      );
+    },
+  );
+  const browserPassword = randomBytes(24).toString("base64url");
+  await check(
+    "Ordinary password signup, e-mail verification, reset, no-purchase denial and legacy account compatibility",
+    async () => {
+      const email = "unpaid-password@example.invalid",
+        password = randomBytes(24).toString("base64url"),
+        headers = new Headers({ origin: env.APP_URL });
+      const { POST: authPOST } = await import("../app/api/auth/[...all]/route");
+      const signupResponse = await authPOST(
+        new Request(env.APP_URL + "/api/auth/sign-up/email", {
+          method: "POST",
+          headers: new Headers({
+            origin: env.APP_URL,
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({ name: "Fiktiv kunde", email, password }),
+        }),
+      );
+      assert.equal(signupResponse.status, 200);
+      const signup = await signupResponse.json();
+      assert.ok(signup.user.id);
+      await assert.rejects(
+        auth().api.signInEmail({ body: { email, password }, headers }),
+      );
+      const mail = (
+        await db().query(
+          "SELECT payload FROM shaz_mail WHERE email=$1 AND kind='verify-email' ORDER BY created_at DESC LIMIT 1",
+          [email],
+        )
+      ).rows[0];
+      const token = new URLSearchParams(
+        new URL(JSON.parse(unseal(mail.payload)).url).hash.slice(1),
+      ).get("verify")!;
+      const verified = await auth().api.verifyEmail({
+        query: { token },
+        headers,
+      });
+      assert.ok(verified.status);
+      const signin = await auth().api.signInEmail({
+        body: { email, password },
+        headers,
+        asResponse: true,
+      });
+      assert.equal(signin.status, 200);
+      const cookie = signin.headers
+        .getSetCookie()
+        .map((c) => c.split(";")[0])
+        .join("; ");
+      await assert.rejects(access(new Headers({ cookie })));
+      await auth().api.requestPasswordReset({
+        body: { email, redirectTo: "/login" },
+        headers,
+      });
+      const resetMail = (
+        await db().query(
+          "SELECT payload FROM shaz_mail WHERE email=$1 AND kind='password-reset' ORDER BY created_at DESC LIMIT 1",
+          [email],
+        )
+      ).rows[0];
+      const reset = new URLSearchParams(
+        new URL(JSON.parse(unseal(resetMail.payload)).url).hash.slice(1),
+      ).get("reset")!;
+      const next = randomBytes(24).toString("base64url");
+      await auth().api.resetPassword({
+        body: { token: reset, newPassword: next },
+        headers,
+      });
+      await assert.rejects(session(new Headers({ cookie })));
+      assert.equal(
+        (
+          await auth().api.signInEmail({
+            body: { email, password: next },
+            headers,
+            asResponse: true,
+          })
+        ).status,
+        200,
+      );
+      for (const u of users)
+        await auth().api.setPassword({
+          body: { newPassword: browserPassword },
+          headers: u.headers,
+        });
+    },
+  );
   // Browser is started in this process tree so it shares the isolated test network.
   const { chromium: pw } = await import("playwright-core");
 
@@ -706,12 +1127,19 @@ try {
               quality: 85,
               fullPage: true,
             });
-          if (route === "/app/food" && width === 1440)
+          if (route === "/app/food" && width === 1440) {
+            await page
+              .getByRole("tab", { name: "Opskrifter", exact: true })
+              .click();
             await page.locator(".food-library").screenshot({
               path: "public/recipe-library.jpg",
               type: "jpeg",
               quality: 85,
             });
+            await page
+              .getByRole("tab", { name: "Min madplan", exact: true })
+              .click();
+          }
           if (route === "/app/food")
             await page.screenshot({
               path: `test-artifacts/food-${width}.png`,
@@ -742,14 +1170,173 @@ try {
       await page.getByRole("button", { name: "Bekræft og log ind" }).click();
       await page.waitForURL("**/app");
       await page.reload();
-      assert.ok(
-        (await page.locator("body").textContent())?.includes("Én god dag"),
-      );
+      assert.ok((await page.locator("body").textContent())?.includes("I dag."));
       await page.goto(env.APP_URL + "/app/profile");
       await page.getByRole("button", { name: "Log ud", exact: true }).click();
       await page.waitForURL("**/login");
       const r = await context.request.get(env.APP_URL + "/api/platform/state");
       assert.equal(r.status(), 401);
+      await context.close();
+    },
+  );
+  await check(
+    "Mobile ordinary password login, meal calculator/dialogs/keyboard/navigation and a second session",
+    async () => {
+      const context = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      const page = await context.newPage();
+      await page.goto(env.APP_URL + "/login");
+      await page.getByLabel("E-mail", { exact: true }).fill(users[2].email);
+      await page
+        .getByLabel("Adgangskode", { exact: true })
+        .fill(browserPassword);
+      await page.getByRole("button", { name: "Log ind", exact: true }).click();
+      await page.waitForURL("**/app");
+      await page.screenshot({
+        path: "test-artifacts/mobile-login-dashboard.png",
+        fullPage: false,
+      });
+      await page.goto(env.APP_URL + "/app/food");
+      await page.getByRole("button", { name: "Beregn & tilpas" }).click();
+      await page.getByLabel("Måltider om dagen").selectOption("3");
+      await page.getByRole("button", { name: "Se nye portioner" }).click();
+      await page
+        .getByRole("button", { name: "Bekræft og gem ændringen" })
+        .click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page
+        .getByRole("button", { name: "Byt · 3 forslag" })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Byt måltid" });
+      await dialog.waitFor();
+      assert.equal(
+        await dialog.locator(".meal-alternatives article").count(),
+        3,
+      );
+      await page.screenshot({
+        path: "test-artifacts/mobile-meal-alternatives.png",
+        fullPage: false,
+      });
+      await page.keyboard.press("Tab");
+      assert.ok(
+        await dialog.evaluate((d) => d.contains(document.activeElement)),
+      );
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      await page
+        .getByRole("button", { name: "Tilpas portion", exact: true })
+        .first()
+        .click();
+      await page.getByLabel("Antal grundportioner").fill("1.05");
+      await page
+        .getByRole("button", { name: "Gem portion", exact: true })
+        .click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page
+        .getByRole("button", { name: "Fjern", exact: true })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Fortryd fjernelse" }).click();
+      await page
+        .getByRole("button", { name: "Fortryd fjernelse" })
+        .waitFor({ state: "hidden" });
+      await page.screenshot({
+        path: "test-artifacts/mobile-food-plan.png",
+        fullPage: false,
+      });
+      await page.getByRole("tab", { name: "Indkøb", exact: true }).click();
+      await page.screenshot({
+        path: "test-artifacts/mobile-shopping.png",
+        fullPage: false,
+      });
+      const before = await (
+        await context.request.get(env.APP_URL + "/api/plan/state")
+      ).json();
+      await page.goto(env.APP_URL + "/app/profile");
+      await page.getByRole("button", { name: "Log ud", exact: true }).click();
+      await page.waitForURL("**/login");
+      await context.close();
+      const second = await browser.newContext({
+          viewport: { width: 390, height: 844 },
+          isMobile: true,
+          hasTouch: true,
+        }),
+        p2 = await second.newPage();
+      await p2.goto(env.APP_URL + "/login");
+      await p2.getByLabel("E-mail", { exact: true }).fill(users[2].email);
+      await p2.getByLabel("Adgangskode", { exact: true }).fill(browserPassword);
+      await p2.getByRole("button", { name: "Log ind", exact: true }).click();
+      await p2.waitForURL("**/app");
+      const after = await (
+        await second.request.get(env.APP_URL + "/api/plan/state")
+      ).json();
+      assert.deepEqual(after.days, before.days);
+      assert.equal(after.profile.data.mealCount, 3);
+      await second.close();
+    },
+  );
+  await check(
+    "Mobile workout draft survives offline edit, dialog close, refresh and exercise change",
+    async () => {
+      const context = await browser.newContext({
+          viewport: { width: 390, height: 844 },
+          isMobile: true,
+          hasTouch: true,
+        }),
+        page = await context.newPage();
+      await page.goto(env.APP_URL + "/login");
+      await page.getByLabel("E-mail", { exact: true }).fill(users[1].email);
+      await page
+        .getByLabel("Adgangskode", { exact: true })
+        .fill(browserPassword);
+      await page.getByRole("button", { name: "Log ind", exact: true }).click();
+      await page.waitForURL("**/app");
+      await page.getByRole("button", { name: "Start træning →" }).click();
+      const input = page.locator('input[aria-label$="gentagelser"]').first();
+      const label = await input.getAttribute("aria-label");
+      await context.setOffline(true);
+      await input.fill("13");
+      await page.getByRole("button", { name: "Luk træning" }).click();
+      await context.setOffline(false);
+      await page.reload();
+      await page.getByRole("button", { name: "Start træning →" }).click();
+      await page.getByLabel(label!, { exact: true }).waitFor();
+      assert.equal(
+        await page.getByLabel(label!, { exact: true }).inputValue(),
+        "13",
+      );
+      await page.getByRole("button", { name: "Gem sæt", exact: true }).click();
+      await page.getByText("✓ Gemt på din konto", { exact: true }).waitFor();
+      await page.reload();
+      await page.getByRole("button", { name: "Start træning →" }).click();
+      assert.equal(
+        await page.getByLabel(label!, { exact: true }).inputValue(),
+        "13",
+      );
+      await page.screenshot({
+        path: "test-artifacts/mobile-workout-draft.png",
+        fullPage: false,
+      });
+      const swap = page.locator('select[aria-label^="Byt "]').first();
+      const replacement = await swap
+        .locator("option")
+        .nth(1)
+        .getAttribute("value");
+      await swap.selectOption(replacement!);
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page.reload();
+      const state = await (
+        await context.request.get(env.APP_URL + "/api/platform/state")
+      ).json();
+      assert.ok(
+        state.drafts.some((d: any) =>
+          d.data.sets.some((s: any) => s.reps === 13),
+        ),
+      );
       await context.close();
     },
   );
@@ -784,7 +1371,7 @@ try {
         "Dit forløb er afsluttet",
       ) ||
         (await page.locator("body").textContent())?.includes(
-          "DIT FORLØB ER AFSLUTTET",
+          "FORLØBET ER AFSLUTTET",
         ),
     );
     await context.close();
@@ -869,6 +1456,7 @@ try {
       await page.getByRole("button", { name: "Gem rettelse" }).click();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       await page.goto(env.APP_URL + "/app/food");
+      await page.getByRole("tab", { name: "Opskrifter", exact: true }).click();
       await page.getByRole("button", { name: "Se opskrift →" }).first().click();
       const dialog = page.getByRole("dialog");
       await dialog.waitFor();
