@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import type { Profile } from "@/lib/profile";
+import CardioSettings from "./CardioSettings";
 import type { CardioPlan } from "@/lib/cardio";
 export type CardioRow = {
   id: string;
@@ -79,10 +80,6 @@ export default function CardioPlanner({
     } finally {
       setBusy(false);
     }
-  }
-  function field<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
-    setForm({ ...form, [k]: v });
-    setPreview(null);
   }
   async function action(type: string, extra = {}) {
     if (!selected) return;
@@ -195,148 +192,17 @@ export default function CardioPlanner({
                 {error}
               </p>
             )}
-            <div className="form-grid">
-              <label>
-                Cardiopas om ugen
-                <select
-                  value={form.days}
-                  onChange={(ev) => {
-                    field("days", Number(ev.target.value));
-                    setForm((f) => ({
-                      ...f,
-                      days: Number(ev.target.value),
-                      weekdays: f.weekdays.slice(0, Number(ev.target.value)),
-                    }));
-                  }}
-                >
-                  {[0, 1, 2, 3, 4].map((n) => (
-                    <option key={n}>{n}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Ønsket varighed (min.)
-                <input
-                  type="number"
-                  min={10}
-                  max={60}
-                  step={5}
-                  value={form.minutes}
-                  onChange={(ev) => field("minutes", Number(ev.target.value))}
-                />
-              </label>
-              <label>
-                Erfaring
-                <select
-                  value={form.level}
-                  onChange={(ev) =>
-                    field("level", ev.target.value as typeof form.level)
-                  }
-                >
-                  <option value="beginner">Begynder</option>
-                  <option value="intermediate">Let øvet</option>
-                </select>
-              </label>
-              <label>
-                Belastning
-                <select
-                  value={form.intensity}
-                  onChange={(ev) =>
-                    field("intensity", ev.target.value as typeof form.intensity)
-                  }
-                >
-                  <option value="easy">Let · hele sætninger uden besvær</option>
-                  <option value="moderate">
-                    Moderat · taletempo med tydelig vejrtrækning
-                  </option>
-                </select>
-              </label>
-            </div>
-            <fieldset>
-              <legend>Foretrukne dage</legend>
-              <div className="weekday-choices">
-                {["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"].map(
-                  (name, i) => (
-                    <label className="p-check" key={name}>
-                      <input
-                        type="checkbox"
-                        checked={form.weekdays.includes(i)}
-                        onChange={(ev) =>
-                          field(
-                            "weekdays",
-                            ev.target.checked
-                              ? [...form.weekdays, i]
-                              : form.weekdays.filter((d) => d !== i),
-                          )
-                        }
-                      />
-                      {name}
-                      {profile.weekdays.includes(i) ? " · styrke" : ""}
-                    </label>
-                  ),
-                )}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Træningsformer</legend>
-              <div className="form-grid">
-                {[
-                  ["walk", "Gang"],
-                  ["cycle", "Cykling"],
-                  ["walk-run", "Løb/gang"],
-                  ["elliptical", "Crosstrainer"],
-                ].map(([v, l]) => (
-                  <label className="p-check" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={form.forms.includes(v as any)}
-                      onChange={(ev) =>
-                        field(
-                          "forms",
-                          (ev.target.checked
-                            ? [...form.forms, v]
-                            : form.forms.filter(
-                                (f) => f !== v,
-                              )) as typeof form.forms,
-                        )
-                      }
-                    />
-                    {l}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Det har du adgang til</legend>
-              <div className="form-grid">
-                {[
-                  ["outdoors", "Udendørs"],
-                  ["bike", "Cykel / motionscykel"],
-                  ["treadmill", "Løbebånd"],
-                  ["elliptical", "Crosstrainer"],
-                ].map(([v, l]) => (
-                  <label className="p-check" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={form.equipment.includes(v as any)}
-                      onChange={(ev) =>
-                        field(
-                          "equipment",
-                          (ev.target.checked
-                            ? [...form.equipment, v]
-                            : form.equipment.filter(
-                                (f) => f !== v,
-                              )) as typeof form.equipment,
-                        )
-                      }
-                    />
-                    {l}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <CardioSettings
+              value={form}
+              onChange={(next) => {
+                setForm(next);
+                setPreview(null);
+                setError("");
+              }}
+            />
             <p className="p-note">
-              Du vælger selv varigheden og dagene. Belastning og restitution indgår i coachens gennemgang. Ingen ekstra cardio ved større underskud.
+              Du bestemmer selv antal pas, dage og minutter. Cardio samme dag som styrke er muligt.
+              Shaz gennemgår den samlede belastning, inden en ny personlig plan sendes.
             </p>
             <button
               className="p-button"
