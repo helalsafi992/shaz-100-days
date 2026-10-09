@@ -26,7 +26,13 @@ Version: shaz-questionnaire-review-v1 · 9. oktober 2026
 **04. Hvordan vil du beskrive din styrketræningserfaring?**
 - Helt ny; under 3 måneder; 3–12 måneder; over 1 år.
 
-**05a. Hvilken aldersgruppe er du i?**\n- 18–39 år; 40–64 år; 65+ (automatiske forslag for 65+ kræver særskilt faglig vurdering).\n\n**05b. Hvor meget sover du typisk?**\n- Under 6 timer; 6–8 timer; over 8 timer; meget varierende. Bruges som restitutionskontekst, ikke en diagnose.\n\n**05. Har du holdt længere pause fra træning for nylig?**
+**05a. Hvilken aldersgruppe er du i?**
+- 18–39 år; 40–64 år; 65+ (automatiske forslag for 65+ kræver særskilt faglig vurdering).
+
+**05b. Hvor meget sover du typisk?**
+- Under 6 timer; 6–8 timer; over 8 timer; meget varierende. Bruges som restitutionskontekst, ikke en diagnose.
+
+**05. Har du holdt længere pause fra træning for nylig?**
 - Nej; mindre end 4 uger; 4 uger eller mere. *Anvendes til forsigtig opstart.*
 
 ## B — Træning og cardio
