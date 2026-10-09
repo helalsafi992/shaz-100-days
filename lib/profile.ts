@@ -99,6 +99,7 @@ export const profileFields = z.object({
   deficitReviewUntil: z.string().optional(),
   aggressiveDaysUsed: z.number().int().min(0).max(14).optional(),
   exerciseAvoid: z.array(z.string().max(100)).max(30).optional(),
+  exercisePreferred: z.array(z.string().max(100)).max(8).optional(),
   cardio: z
     .object({
       days: z.number().int().min(0).max(6),
