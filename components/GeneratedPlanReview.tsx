@@ -1,24 +1,35 @@
 "use client";
+import CoachPlanSubmission from './CoachPlanSubmission';
 import {useEffect,useRef,useState} from 'react';
 import type {Profile} from '@/lib/profile';
+import {weekdayNames} from '@/lib/profile';
+import type {DayPlan} from '@/lib/training';
+import type {MealDay} from '@/lib/meal-plan';
+import type {CardioPlan} from '@/lib/cardio';
 import {onboardingRequest} from '@/lib/onboarding-request';
 import {asDraft,type WizardAnswers} from './PersonalizationSteps';
-type Receipt={id:string;status:'awaiting_review';message:string};
-export default function GeneratedPlanReview({profile,answers,expectedVersion,startConfirmed}:{profile:Profile;answers:WizardAnswers;onChange:(a:WizardAnswers)=>void;expectedVersion:number;startConfirmed:boolean}){
- const[configuration,setConfiguration]=useState<{enabled:boolean;reason:string|null}|null>(null),[status,setStatus]=useState('none'),[receipt,setReceipt]=useState<Receipt|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+type Configuration={enabled:boolean;reason:string|null;mode?:'generate-and-confirm'|'coach-review'};
+type Plan={id:string;summary:string;sessions:DayPlan[];meals:MealDay[];cardio:CardioPlan[];injuryAdvice:string[];progression:string;evidenceAvailable:boolean;sources:{pmid:string;title:string;url:string}[]};
+export default function GeneratedPlanReview({profile,answers,onChange,expectedVersion,startConfirmed}:{profile:Profile;answers:WizardAnswers;onChange:(a:WizardAnswers)=>void;expectedVersion:number;startConfirmed:boolean}){
+ const[configuration,setConfiguration]=useState<Configuration|null>(null),[plan,setPlan]=useState<Plan|null>(null),[busy,setBusy]=useState(false),[applying,setApplying]=useState(false),[error,setError]=useState('');
  const signature=JSON.stringify({profile,answers}),version=useRef(signature);version.current=signature;
- useEffect(()=>{setReceipt(null);setStatus('none');setError('');},[signature]);
- async function refresh(restore=true){const d=await onboardingRequest<{configuration:{enabled:boolean;reason:string|null};status:string;result:Receipt|null}>('/api/ai/plan');setConfiguration(d.configuration);if(restore){setStatus(d.status);setReceipt(d.result);}}
- useEffect(()=>{void refresh(false).catch(()=>setError('Status kunne ikke hentes. Prøv igen.'));},[]);
- async function submit(){const current=version.current;setBusy(true);setError('');try{
-  if(!answers.planConsent)throw Error('Gå tilbage til Dit mål og acceptér databehandlingen, før du sender dine valg.');
-  const r=await onboardingRequest<Receipt>('/api/ai/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'generate',profile,answers:asDraft(answers,true),expectedVersion})},{attempts:1});
-  if(version.current!==current)throw Error('Du ændrede dine valg imens. Gennemgå dem før du sender igen.');setReceipt(r);setStatus(r.status);
- }catch(e){setError(e instanceof Error?e.message:'Dine valg kunne ikke sendes. Prøv igen.');}finally{setBusy(false);}}
- return <section className="generated-plan coach-client-flow"><h2>Din personlige plan</h2><p>Send dine valg til Shaz. Han gennemgår træningen og madplanen, før de bliver lagt ind i dit forløb.</p>
- {configuration&&!configuration.enabled&&<p role="status" className="p-notice">{configuration.reason}</p>}
- {status==='awaiting_review'||receipt?<section className="p-notice" role="status"><h3>Afventer Shaz’ gennemgang</h3><p>Dine valg er modtaget. Din nuværende plan og registreringer er ikke ændret.</p><button type="button" className="p-secondary" onClick={()=>void refresh().catch(()=>setError('Status kunne ikke opdateres.'))}>Opdatér status</button></section>:status==='committed'?<section className="p-notice" role="status"><h3>Din plan er klar</h3><a className="p-button" href="/app">Åbn mit forløb</a><button type="button" className="p-secondary" onClick={()=>{setStatus('none');setReceipt(null);}}>Send nye valg</button></section>:<button type="button" className="p-button" disabled={busy||!configuration?.enabled||!startConfirmed} onClick={submit}>{busy?'Sender dine valg…':'Send til godkendelse'}</button>}
- {busy&&<p role="status" className="p-note">Dine valg behandles. Planen udleveres først efter coachens godkendelse.</p>}
+ useEffect(()=>{setPlan(null);setError('');},[signature]);
+ useEffect(()=>{let active=true;onboardingRequest<{configuration:Configuration}>('/api/ai/plan').then(d=>{if(active)setConfiguration(d.configuration);}).catch(()=>{if(active)setConfiguration({enabled:false,reason:'Forbindelsen til planlægningen kunne ikke hentes. Genindlæs siden.'});});return()=>{active=false;};},[]);
+ async function generate(){const current=version.current;setBusy(true);setError('');try{if(!answers.planConsent)throw Error('Gå tilbage til Dit mål, og acceptér databehandlingen, før din plan laves.');const result=await onboardingRequest<Plan>('/api/ai/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'generate',profile,answers:asDraft(answers,true),expectedVersion})},{attempts:1});if(version.current!==current)throw Error('Dine valg ændrede sig under beregningen. Lav planen igen.');if(!Array.isArray(result.sessions)||!Array.isArray(result.meals))throw Error('Planens status er ændret. Genindlæs siden.');setPlan(result);}catch(e){setError(e instanceof Error?e.message:'Planen kunne ikke laves. Prøv igen.');}finally{setBusy(false);}}
+ async function apply(){if(!plan)return;setApplying(true);setError('');try{await onboardingRequest('/api/ai/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'apply',id:plan.id})},{attempts:1});window.location.assign('/app');}catch(e){setError(e instanceof Error?e.message:'Kunne ikke gemme planen. Dine gamle registreringer er bevaret.');setApplying(false);}}
+ if(configuration?.mode==='coach-review'||(configuration&&configuration.mode===undefined))return <CoachPlanSubmission profile={profile} answers={answers} onChange={onChange} expectedVersion={expectedVersion} startConfirmed={startConfirmed}/>;
+ return <section className="generated-plan"><h2>Din personlige plan</h2><p>Få en trænings- og madplan, der tager udgangspunkt i dine mål, din uge, dine kostvalg og eventuelle skader.</p>
+ {configuration&&!configuration.enabled&&<p className="p-notice" role="status">{configuration.reason}</p>}
+ {!plan&&<button type="button" className="p-button" disabled={busy||!configuration?.enabled||!startConfirmed} onClick={generate}>{busy?'Laver din plan…':'Lav min trænings- og madplan'}</button>}
+ {busy&&<p className="p-note" role="status">Du ser planen først og vælger derefter, om du vil bruge den. Lad siden blive åben.</p>}
  {error&&<p className="p-error" role="alert">{error}</p>}
- <p className="p-note"><a href="/privacy" target="_blank" rel="noopener noreferrer">Sådan behandles dine oplysninger</a>. Ingen diagnose eller behandlingsgaranti.</p></section>;
+ {plan&&<div className="generated-result"><h3>Dit samlede forslag</h3><p>{plan.summary}</p>
+ <details open><summary>Træningsplan · {plan.sessions.length} styrkepas om ugen</summary>{plan.sessions.map(d=><section key={d.day} className="p-card"><h3>{weekdayNames[new Date(d.date+'T12:00:00Z').getUTCDay()]} · {d.title}</h3><p>{d.locationName} · {d.minutes} min.</p>{d.exercises.map(e=><div className="p-list-row" key={e.id}><span>{e.name}</span><strong>{e.sets} × {e.min}–{e.max}</strong></div>)}</section>)}</details>
+ {plan.cardio.length>0&&<details><summary>Kondition · {plan.cardio.length} pas om ugen</summary>{plan.cardio.map(d=><p key={d.day}>{weekdayNames[new Date(d.date+'T12:00:00Z').getUTCDay()]}: {d.selected.title} · {d.selected.minutes} min.</p>)}</details>}
+ <details open><summary>Madplan · 7 dages rotation med tre valg pr. måltid</summary>{plan.meals.map((d,i)=><details key={d.date} open={i===0}><summary>Dag {i+1} · {d.target?`${d.target} kcal`:'Portionsvejledning'}</summary>{d.slots.map(s=><div className="p-list-row" key={s.id}><span>{s.name}<strong>{s.selected?.recipe.name}</strong></span><span>{Math.round(s.selected?.totals.kcal||0)} kcal</span></div>)}</details>)}</details>
+ {plan.injuryAdvice.length>0&&<section className="p-notice"><h3>Hensyn til dine skader</h3>{plan.injuryAdvice.map((s,i)=><p key={i}>{s}</p>)}</section>}
+ <details><summary>Progression og kilder</summary><p>{plan.progression}</p>{plan.sources.map(s=><p key={s.pmid}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a></p>)}{!plan.evidenceAvailable&&<p>Der kunne ikke hentes eksterne kilder i denne kørsel. Forslaget er derfor ikke kildeverificeret.</p>}</details>
+ <p className="p-note">Planen gælder dine 100 dage. Allerede registrerede pas, spiste måltider og sammenkædet madlavning overskrives ikke.</p>
+ <button type="button" className="p-button" disabled={busy||applying||!startConfirmed} onClick={apply}>{applying?'Gemmer din plan…':'Brug denne trænings- og madplan'}</button>
+ </div>}</section>;
 }

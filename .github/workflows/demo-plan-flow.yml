@@ -1,0 +1,69 @@
+name: SHAZ immediate demonstration plan
+on:
+  push:
+    branches: [fix/demo-without-review]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: shaz-demo-plan-flow
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply exact demo correction and preserve future exercise changes
+        run: |
+          python3 scripts/apply-coach-source.py
+          python3 scripts/refine-future-swap.py
+          python3 scripts/apply-demo-flow.py
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Existing customer and database regressions
+        run: npm run test:integration
+      - name: Later coach mode plus unrestricted cardio and exercise substitutions
+        run: node --import tsx scripts/intake-regression.mts
+      - name: Immediate demo plan on mobile and desktop
+        run: node --import tsx scripts/demo-plan-regression.mts
+      - name: Commit only source that passed every check
+        if: success()
+        run: |
+          git add app components lib tests scripts/intake-regression.mts docs/FUTURE_EXERCISE_SWAP.md docs/DEMO_PLAN_FLOW_APPLIED.md
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Restore immediate demo plan generation and use, without provider field or approval queue'
+            git push origin HEAD:fix/demo-without-review
+          fi
+          mkdir -p test-artifacts
+          git rev-parse HEAD > test-artifacts/tested-source-commit.txt
+      - name: Evidence and exact tested source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-plan-evidence
+          path: |
+            test-artifacts
+            app
+            components
+            lib
+            migrations
+            scripts
+            tests
+            docs/DEMO_PLAN_FLOW.md
+            package.json
+            package-lock.json
+            tsconfig.json
+            next.config.ts
+          if-no-files-found: error
+          retention-days: 7
