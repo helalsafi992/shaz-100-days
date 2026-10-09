@@ -1,4 +1,5 @@
 import data from "./data/ingredients.json";
+import { matchesDiet } from "./dietary";
 export const ingredients = data;
 export type Ingredient = (typeof ingredients)[number];
 export type Recipe = {
@@ -766,6 +767,114 @@ export const recipes: Recipe[] = [
       "Vend de kogte linser i, varm grundigt og servér med fuldkornsbrød.",
     ],
   ),
+  r(
+    "vegan-oat-peanut-chia",
+    "Varm havregrød med banan, peanut og chia",
+    "breakfast",
+    15,
+    1,
+    [["oats",80],["banana",90],["peanut",25],["chia",16],["strawberry",100]],
+    ["Kog havregryn i vand ved svag varme til en cremet grød.","Top med banan i skiver, jordbær, peanutbutter og chiafrø."],
+  ),
+  r(
+    "vegan-berry-tofu-oats",
+    "Overnight oats med tofucreme og blåbær",
+    "breakfast",
+    10,
+    1,
+    [["oats",70],["tofu",200],["blueberry",100],["chia",15],["peanut",15]],
+    ["Blend tofu med lidt vand til en glat creme. Smag til med banan, hvis ønsket (medregn da bananen separat).","Rør havregryn og chia i cremen. Stil koldt natten over og top med blåbær og peanutbutter."],
+  ),
+  r(
+    "vegan-tofu-potato-breakfast",
+    "Tofurøre med spinat og kartofler",
+    "breakfast",
+    25,
+    1,
+    [["tofu",200],["potato",200],["spinach",80],["oil",12],["tomato",90]],
+    ["Skær kartofler i små tern og kog dem møre. Dræn grundigt.","Smuldr tofu og steg den i olivenolie med kartofler, spinat og tomat. Smag til med krydderier uden væsentlig energi."],
+  ),
+  r(
+    "vegan-apple-oat-almond",
+    "Æblegrød med mandler, peanut og chia",
+    "breakfast",
+    15,
+    1,
+    [["oats",80],["almonds",25],["peanut",25],["apple",125],["chia",10]],
+    ["Kog havregryn med vand, revet æble og chiafrø, indtil grøden tykner.","Top med hakkede mandler og peanutbutter."],
+  ),
+  r(
+    "vegan-chickpea-tofu-bowl",
+    "Kikærte- og tofubowl med fuldkornsris",
+    "lunch",
+    30,
+    1,
+    [["chickpeas",150],["tofu",180],["rice",65],["cucumber",100],["tomato",100],["oil",10],["lemon",12]],
+    ["Kog brune ris efter anvisningen på pakken.","Steg tofutern på en pande i olivenolie. Skyl kikærter og grønt.","Servér ris med tofu, kikærter, agurk, tomat og citronsaft."],
+  ),
+  r(
+    "vegan-lentil-tofu-salad",
+    "Linsesalat med tofu og sprøde grøntsager",
+    "lunch",
+    30,
+    1,
+    [["lentils",90],["tofu",170],["cucumber",100],["tomato",100],["spinach",60],["oil",10],["lemon",12]],
+    ["Skyl og kog linserne, til de er møre; hæld vandet fra.","Steg tofu kort i olie, og bland med linser og grøntsager.","Vend med citronsaft og eventuelt krydderier."],
+  ),
+  r(
+    "vegan-bean-potato-tofu",
+    "Bønne- og kartoffelskål med tofu",
+    "lunch",
+    25,
+    1,
+    [["beans",200],["potato",240],["tofu",150],["oil",12],["spinach",90],["tomato",80]],
+    ["Skær og kog kartoflerne møre, og hæld vandet fra. Skyl bønnerne.","Steg tofu og spinat i olivenolie, og varm bønnerne godt igennem.","Servér med kartofler og tomater."],
+  ),
+  r(
+    "vegan-tofu-rice-broccoli",
+    "Stegt tofu med broccoli og ris",
+    "dinner",
+    30,
+    1,
+    [["tofu",230],["rice",80],["broccoli",180],["oil",11],["lemon",15],["peanut",12]],
+    ["Kog de brune ris efter pakkens anvisning.","Steg tofutern i olie, til de er gennemvarme. Damp broccoli.","Vend med citronsaft og lidt varmt vand, og servér med ris og hakkede peanuts."],
+  ),
+  r(
+    "vegan-lentil-chickpea-chili",
+    "Linse- og kikærtegryde med tofu",
+    "dinner",
+    35,
+    1,
+    [["lentils",90],["chickpeas",130],["tofu",140],["canned-tomato",180],["onion",70],["oil",12]],
+    ["Kog linserne i vand til de er møre. Skyl kikærter.","Steg hakket løg og tofu i olie. Tilsæt tomat, linser og kikærter.","Lad simre nogle minutter; servér varmt."],
+  ),
+  r(
+    "vegan-berry-tofu-bowl",
+    "Tofucreme med bær, chia og peanut",
+    "snack",
+    10,
+    1,
+    [["tofu",220],["strawberry",120],["banana",90],["peanut",30],["chia",14]],
+    ["Blend tofu med banan til en glat creme, og tilsæt eventuelt en smule vand.","Top med skårne jordbær, peanutbutter og chiafrø."],
+  ),
+  r(
+    "vegan-tofu-peanut-dip",
+    "Cremet tofudip med grøntsagsstænger",
+    "snack",
+    15,
+    1,
+    [["tofu",200],["peanut",35],["cucumber",150],["carrot",120],["lemon",12]],
+    ["Blend tofu, peanutbutter og citronsaft med lidt vand til en cremet dip.","Skær agurk og gulerødder i stave og servér til."],
+  ),
+  r(
+    "vegan-apple-oat-peanut",
+    "Æblebowl med havre, mandler og peanut",
+    "snack",
+    10,
+    1,
+    [["apple",160],["oats",50],["peanut",30],["almonds",20],["chia",12]],
+    ["Skær æble i tern. Vend med havregryn og chia.","Top med mandler og peanutbutter. Spis straks for en sprød konsistens."],
+  ),
 ];
 export function nutrients(recipe: Recipe, servings = 1) {
   const sums = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
@@ -795,7 +904,7 @@ export function suitable(
         f &&
         !avoid.includes(f.id) &&
         !f.allergens.some((a) => avoid.includes(a)) &&
-        (diet !== "vegetarian" || f.vegetarian) &&
+        matchesDiet(f.id, f.vegetarian, diet) &&
         (!(diet === "halal" || halal) || f.halal)
       );
     })
