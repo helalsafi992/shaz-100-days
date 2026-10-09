@@ -21,7 +21,9 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Materialize guarded source changes
-        run: python3 scripts/apply-coach-source.py
+        run: |
+          python3 scripts/apply-coach-source.py
+          python3 scripts/refine-future-swap.py
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -33,11 +35,11 @@ jobs:
       - name: Commit only validated source to this branch
         if: success()
         run: |
-          git add app components lib tests scripts/integration.mts scripts/intake-regression.mts docs/COACH_REVIEW_SOURCE_APPLIED.md
+          git add app components lib tests scripts/integration.mts scripts/intake-regression.mts docs/COACH_REVIEW_SOURCE_APPLIED.md docs/FUTURE_EXERCISE_SWAP.md
           if ! git diff --cached --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -m 'Materialize verified coach approval, flexible cardio and three exercise choices'
+            git commit -m 'Allow approved exercise substitutions before the training date without logging future performance'
             git push origin HEAD:feat/coach-review-flexible-training
           fi
           mkdir -p test-artifacts
