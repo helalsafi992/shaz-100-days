@@ -2066,6 +2066,71 @@ try {
     },
   );
   await check(
+    "Onboarding answers render as separated accessible option tiles at 320, 390 and 1440px",
+    async () => {
+      for (const width of [320, 390, 1440]) {
+        const context = await browser.newContext({
+          viewport: { width, height: width === 1440 ? 1000 : 844 },
+        });
+        const cookies = users[0].cookie.split("; ").map((c) => {
+          const i = c.indexOf("=");
+          return { name: c.slice(0, i), value: c.slice(i + 1), url: env.APP_URL };
+        });
+        await context.addCookies(cookies);
+        const page = await context.newPage();
+        const errors: string[] = [];
+        page.on("pageerror", (e) => errors.push(e.message));
+        const response = await page.goto(env.APP_URL + "/onboarding?edit=1", {
+          waitUntil: "networkidle",
+        });
+        assert.equal(response?.status(), 200);
+        const buttons = page.locator(".shaz-personalize .shaz-choice-row > button");
+        await buttons.first().waitFor({ state: "visible" });
+        assert.ok((await buttons.count()) >= 18, "Missing the adaptive choice tiles");
+        const metrics = await page.locator(".shaz-choice-row").first().evaluate((row) => {
+          const buttons = Array.from(row.querySelectorAll<HTMLButtonElement>("button"));
+          const r1 = buttons[0].getBoundingClientRect();
+          const r2 = buttons[1].getBoundingClientRect();
+          const css = getComputedStyle(row);
+          const bcss = getComputedStyle(buttons[0]);
+          return {
+            display: css.display,
+            gap: Number.parseFloat(css.columnGap),
+            buttonHeight: r1.height,
+            buttonWidth: r1.width,
+            separation: r2.top === r1.top ? r2.left - r1.right : r2.top - r1.bottom,
+            borderStyle: bcss.borderStyle,
+          };
+        });
+        assert.equal(metrics.display, "grid", "Answers rendered as unstyled inline text");
+        assert.ok(metrics.gap >= 6 && metrics.separation >= 5, "Answer controls are touching");
+        assert.ok(metrics.buttonHeight >= 44 && metrics.buttonWidth >= 80, "Answer targets too small");
+        assert.notEqual(metrics.borderStyle, "none");
+        assert.equal(
+          await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
+          false,
+          "Onboarding horizontal overflow at " + width,
+        );
+        await page.getByRole("button", { name: "Muskelopbygning", exact: true }).click();
+        assert.equal(
+          await page.getByRole("button", { name: "Muskelopbygning", exact: true }).getAttribute("aria-pressed"),
+          "true",
+        );
+        const contrast = await page.getByRole("button", { name: "Muskelopbygning", exact: true }).evaluate((el) => {
+          const css = getComputedStyle(el);
+          return { background: css.backgroundColor, border: css.borderColor };
+        });
+        assert.notEqual(contrast.background, "rgba(0, 0, 0, 0)");
+        assert.deepEqual(errors, []);
+        await page.screenshot({
+          path: "test-artifacts/onboarding-" + width + ".png",
+          fullPage: true,
+        });
+        await context.close();
+      }
+    },
+  );
+  await check(
     "T06/M08/M10 mobile UI: password login, cancelled preview, persistent pause and batch, saved grouped shopping",
     async () => {
       const context = await browser.newContext({
