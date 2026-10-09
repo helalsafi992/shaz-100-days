@@ -14,6 +14,8 @@ import ActivitySettings from "./ActivitySettings";
 import { activitySettings } from "@/lib/activity-settings";
 import { deficitLevels } from "@/lib/nutrition";
 import { intakeVersion } from "@/lib/ai/intake";
+import type { IntakeDraft } from "@/lib/ai/intake-draft";
+import { GoalQuestions, SafetyQuestions, FoodPreferenceQuestions, PreferredExerciseQuestions, ReviewAIQuestion, newAnswers, restoreAnswers, asDraft, stageError, type WizardAnswers } from "./PersonalizationSteps";
 const titles = [
   "Mål og udgangspunkt.",
   "Din træning og dine dage.",
@@ -35,6 +37,7 @@ export default function Onboarding({
       ...defaults,
       ...initial,
       ...activitySettings(initial),
+      personalizationVersion: intakeVersion,
     }),
     [step, setStep] = useState(
       initialStep >= 7 ? 4 : initialStep >= 4 ? 3 : initialStep >= 1 ? 1 : 0,
@@ -43,6 +46,23 @@ export default function Onboarding({
     [error, setError] = useState(""),
     [planPreview, setPlanPreview] = useState<any>(null),
     [startConfirmed, setStartConfirmed] = useState(editing);
+  const [answers, setAnswers] = useState<WizardAnswers>(() => newAnswers(initial));
+  const [intakeLoaded, setIntakeLoaded] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/ai/intake", { cache: "no-store" })
+      .then(async r => { if (!r.ok) throw Error("Tidligere svar kunne ikke hentes."); return r.json(); })
+      .then((d: { draft: IntakeDraft | null }) => { if (active && d.draft) setAnswers(a => restoreAnswers(a, d.draft!)); })
+      .catch(e => { if (active) setError(e instanceof Error ? e.message : "Svarene kunne ikke hentes."); })
+      .finally(() => { if (active) setIntakeLoaded(true); });
+    return () => { active = false; };
+  }, []);
+  async function persistIntake(includeSafety: boolean) {
+    const r = await fetch("/api/ai/intake", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(asDraft(answers, includeSafety)) });
+    const d = await r.json();
+    if (!r.ok) throw Error(d.error || "Dine svar kunne ikke gemmes.");
+  }
   const calculation = energy(p);
   function field<K extends keyof Profile>(k: K, v: Profile[K]) {
     setPlanPreview(null);
