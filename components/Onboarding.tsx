@@ -77,13 +77,15 @@ export default function Onboarding({
     }));
   }
   async function save(next: number, activate = false) {
-    if (editing && !activate) {
-      setStep(next);
-      return;
-    }
     setBusy(true);
     setError("");
     try {
+      if (!intakeLoaded) throw Error("Vent mens dine svar indlæses.");
+      const problem = stageError(step, answers);
+      if (problem) throw Error(problem);
+      if (step >= 3 && stageError(2, answers)) throw Error(stageError(2, answers)!);
+      if ([0,2,3,4].includes(step)) await persistIntake(step >= 2);
+      if (editing && !activate) { setStep(next); return; }
       if (editing && activate) {
         const r = await fetch(
           "/api/plan/" +
