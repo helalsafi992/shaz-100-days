@@ -449,7 +449,26 @@ export default function Onboarding({
         )}
         {step === 4 && (
           <>
-            <ReviewAIQuestion value={answers} onChange={setAnswers} disabledReason="AI-vurdering er frivillig og kræver godkendt databehandling. Standardplanen fungerer uden AI." />
+            <ReviewAIQuestion value={answers} onChange={setAnswers}
+              disabledReason={!aiInfo?.configured ? "AI-funktionen er endnu ikke slået til. Din almindelige plan fungerer uden AI."
+                : !aiInfo.privacyApproved ? "AI-vurdering afventer den særskilte databeskyttelsesgodkendelse."
+                : !aiInfo.questionsApproved ? "AI-spørgsmålene afventer godkendelse." : null}/>
+            {answers.aiConsent && aiInfo?.configured && aiInfo.privacyApproved && aiInfo.questionsApproved && (
+              <section className="p-card">
+                <h2>Ekstra AI-vurdering</h2>
+                <button className="p-secondary" type="button" disabled={busy||aiBusy} onClick={requestAIReview}>
+                  {aiBusy?"Gennemgår evidens…":"Se forslag fra AI"}
+                </button>
+                {aiReview?.proposal && <div role="status"><p>{aiReview.proposal.summary}</p>
+                  <details><summary>Se alternativer og kildehenvisninger</summary>
+                  {aiReview.proposal.choices.map(c=><p key={c.slotId}><b>{c.selectedId}</b>: {c.reason}
+                    {c.pmids.length>0 && <span> · PMID {c.pmids.join(", ")}</span>}</p>)}
+                  </details>
+                  <p className="p-note">{aiReview.proposal.limitations.join(" · ")}</p>
+                  <p className="p-note">Forslagene er ikke en individuel klinisk vurdering og ændrer ikke automatisk din plan.</p>
+                </div>}
+              </section>
+            )}
             <div className="p-card summary-card">
               <span className="p-eyebrow">DET HER ER DIN PLAN</span>
               <h2>
