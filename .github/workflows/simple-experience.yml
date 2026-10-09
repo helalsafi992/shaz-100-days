@@ -1,7 +1,7 @@
 name: SHAZ customer experience validation
 on:
   push:
-    branches: [feat/simple-customer-experience, feat/integrated-plans, main]
+    branches: [feat/simple-customer-experience, feat/integrated-plans, main, fix/clear-onboarding]
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,13 +30,14 @@ jobs:
       - run: npm run build
       - name: Integration tests with isolated database and browser
         run: npm run test:integration
+      - name: Complete novice onboarding and safety regression tests
+        run: node --import tsx scripts/intake-regression.mts
       - name: Fresh test evidence only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: validation-evidence
-          path: |
-            test-artifacts
+          path: test-artifacts
           if-no-files-found: error
           retention-days: 14
       - name: Tested source snapshot
