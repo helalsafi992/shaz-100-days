@@ -114,7 +114,7 @@ export async function applyGeneratedPlan(user:string,id:string,review?:{actor:st
   const row=(await c.query('SELECT * FROM shaz_generated_plans WHERE user_id=$1 AND id=$2 FOR UPDATE',[user,id])).rows[0];
   if(!row)throw new HttpError(404,'Planen findes ikke.');
   if(row.status==='committed')return{ok:true,alreadyApplied:true};
-  if(!review&&!demoDirectDelivery())throw new HttpError(403,'Planen skal gennemgås af Shaz før den kan frigives.');
+  if(!review&&!demoDirectDelivery())throw new HttpError(403,'Planen afventer godkendelse fra Shaz.');
   if(review){
    const role=(await c.query("SELECT role FROM shaz_roles WHERE user_id=$1",[review.actor])).rows[0];
    if(!role||role.role!=='owner')throw new HttpError(403,'Kun en verificeret coach kan godkende planen.');
