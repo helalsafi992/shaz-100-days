@@ -27,10 +27,12 @@ const storedSteps = [0, 1, 1, 4, 7];
 export default function Onboarding({
   initial,
   initialStep = 0,
+  initialVersion = 1,
   editing = false,
 }: {
   initial: Profile;
   initialStep?: number;
+  initialVersion?: number;
   editing?: boolean;
 }) {
   const [p, setP] = useState<Profile>({
@@ -67,6 +69,21 @@ export default function Onboarding({
       body: JSON.stringify(asDraft(answers, includeSafety)) });
     const d = await r.json();
     if (!r.ok) throw Error(d.error || "Dine svar kunne ikke gemmes.");
+  }
+  async function requestAIReview() {
+    if(!aiInfo?.configured || !aiInfo?.privacyApproved || !aiInfo?.questionsApproved) return;
+    setAiBusy(true);setError("");
+    try {
+      if(!answers.aiConsent)throw Error("Vælg frivillig AI-vurdering først.");
+      const draft=asDraft(answers,true);
+      await persistIntake(true);
+      const intake={...draft,profile:p,dietPattern:p.diet==="halal"?"all":p.diet};
+      const r=await fetch("/api/ai/personalize",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({intake,expectedProfileVersion:initialVersion})});
+      const d=await r.json();if(!r.ok)throw Error(d.error || "AI-vurdering kunne ikke hentes.");
+      setAiReview(d);
+    }catch(e){setError(e instanceof Error?e.message:"AI-vurdering kunne ikke hentes.");}
+    finally{setAiBusy(false);}
   }
   const calculation = energy(p);
   function field<K extends keyof Profile>(k: K, v: Profile[K]) {
