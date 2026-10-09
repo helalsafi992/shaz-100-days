@@ -250,3 +250,20 @@
   .portal.onboarding .onboard-back-link { font-size: 12px; }
   .portal.onboarding .onboard-shell > .onboard-step-heading { font-size: 18px; }
 }
+
+/* Concise injury intake and actual plan confirmation. */
+.portal.onboarding .concise-injury{display:grid;grid-template-columns:1fr;gap:16px}
+.portal.onboarding .concise-injury .shaz-checkbox-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.portal.onboarding .injury-description{display:grid;gap:9px;font-weight:650;font-size:14px}
+.portal.onboarding .injury-description textarea{width:100%;min-height:100px;border:1px solid #cfdbca;border-radius:10px;padding:12px;font:inherit;font-size:16px;resize:vertical;background:white}
+.portal.onboarding .generated-plan{background:white;border:1px solid #dbe5d5;border-radius:14px;padding:20px;margin:20px 0}
+.portal.onboarding .generated-plan h2{font-size:22px;margin:0 0 12px}
+.portal.onboarding .generated-plan p{font-size:14px;line-height:1.55}
+.portal.onboarding .generated-plan .p-check{font-size:14px;line-height:1.5}
+.portal.onboarding .generated-plan .p-button{width:100%;margin-top:16px;min-height:48px}
+.portal.onboarding .generated-result details{margin:14px 0;border-top:1px solid #e3eade;padding-top:10px}
+.portal.onboarding .generated-result summary{font-weight:650;font-size:15px;min-height:44px;padding:8px 0;cursor:pointer}
+.portal.onboarding .generated-result .p-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #edf0e9;font-size:13px}
+.portal.onboarding .generated-result .p-list-row span strong{display:block;font-weight:600}
+.portal.onboarding .generated-result .p-list-row strong{flex-shrink:0}
+@media(max-width:480px){.portal.onboarding .cardio-settings .p-fields,.portal.onboarding .cardio-settings .form-grid{grid-template-columns:1fr}.portal.onboarding .generated-plan{padding:16px}}

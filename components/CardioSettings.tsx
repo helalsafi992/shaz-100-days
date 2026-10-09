@@ -1,4 +1,5 @@
 "use client";
+import NumberInput from "./forms/NumberInput";
 import type { Profile } from "@/lib/profile";
 import { weekdays, weekdayNames } from "@/lib/profile";
 export const noCardio: NonNullable<Profile["cardio"]> = {
@@ -20,7 +21,7 @@ export default function CardioSettings({
   const field = <K extends keyof typeof value>(k: K, v: (typeof value)[K]) =>
     onChange({ ...value, [k]: v });
   return (
-    <fieldset>
+    <fieldset className="cardio-settings">
       <legend>Valgfri ekstra cardio</legend>
       <div className="form-grid">
         <label>
@@ -46,14 +47,7 @@ export default function CardioSettings({
           <>
             <label>
               Ønsket varighed (min.)
-              <input
-                type="number"
-                min={10}
-                max={60}
-                step={5}
-                value={value.minutes}
-                onChange={(e) => field("minutes", Number(e.target.value))}
-              />
+              <NumberInput min={10} max={60} value={value.minutes} onValue={minutes=>field("minutes",minutes as number)}/>
             </label>
             <label>
               Cardioerfaring

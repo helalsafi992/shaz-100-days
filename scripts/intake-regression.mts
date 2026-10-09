@@ -87,13 +87,47 @@ try{
   }
  });
  await check('Canonical unit switching and no overflow at 320,390,1440px',async()=>{for(const width of [320,390,1440]){const context=await browser!.newContext({viewport:{width,height:width===1440?1000:844}});await context.addCookies(active.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(env.APP_URL+'/onboarding?edit=1',{waitUntil:'networkidle'});await page.getByRole('button',{name:'Vægt',exact:true}).click();await page.getByLabel('Din vægt nu (kg)',{exact:true}).fill('80');await page.getByLabel('Din ønskede vægt (kg)',{exact:true}).fill('72,5');await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('lbs');assert.match(await page.getByLabel('Din vægt nu (lbs)',{exact:true}).inputValue(),/^176/);await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('kg');assert.equal(await page.getByLabel('Din ønskede vægt (kg)',{exact:true}).inputValue(),'72,5');await page.getByRole('button',{name:'Løbedistance',exact:true}).click();await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('miles');await page.getByLabel('Så langt kan du løbe nu (miles)',{exact:true}).fill('2');await page.getByLabel('Så langt vil du kunne løbe (miles)',{exact:true}).fill('5');await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('km');assert.match(await page.getByLabel('Så langt vil du kunne løbe (km)',{exact:true}).inputValue(),/^8,05/);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);await page.screenshot({path:'test-artifacts/clear-goal-'+width+'.png',fullPage:true});await context.close();}});
- await check('Fictional 18-year-old completes five areas and activates a saved vegan plan',async()=>{const fresh=await customer('clear-novice'),context=await browser!.newContext({viewport:{width:390,height:844}});await context.addCookies(fresh.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(env.APP_URL+'/onboarding',{waitUntil:'networkidle'});await page.getByRole('button',{name:'18–39 år',exact:true}).click();await page.getByRole('button',{name:'Helt ny',exact:true}).click();await page.getByLabel('Jeg er mindst 18 år.',{exact:true}).check();await page.getByLabel(/Jeg accepterer, at SHAZ gemmer/).check();await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din uge',exact:true}).waitFor();await page.getByLabel('Styrkepas om ugen',{exact:true}).selectOption('2');await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Dine hensyn',exact:true}).waitFor();assert.equal(await page.locator('.compact-health > fieldset').count(),3);await page.getByRole('button',{name:'Nej, ingen af delene',exact:true}).first().click();await page.getByRole('button',{name:'Ingen gener',exact:true}).click();await page.getByRole('button',{name:'Nej, ingen af delene',exact:true}).last().click();
-// Reopening a group must not preserve the previous grouped No as a fresh answer.
-await page.getByRole('button',{name:'Ja eller jeg er i tvivl',exact:true}).first().click();
-await page.getByRole('button',{name:/Gem og fortsæt/}).click();
-await page.getByRole('alert').filter({hasText:'Svar på alle sikkerhedsspørgsmål'}).waitFor();
-assert.ok(await page.getByRole('heading',{name:'Dine hensyn',exact:true}).isVisible());
-await page.getByRole('button',{name:'Nej, ingen af delene',exact:true}).first().click();
-await page.screenshot({path:'test-artifacts/clear-health-390.png',fullPage:true});await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din mad',exact:true}).waitFor();await page.getByRole('button',{name:'Vegansk',exact:true}).click();await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din plan',exact:true}).waitFor();assert.ok(await page.locator('.schedule-summary').isVisible());await page.getByLabel(/Jeg vælger .* som dag 1/).check();await page.screenshot({path:'test-artifacts/clear-summary-390.png',fullPage:true});await page.getByRole('button',{name:'Start mit 100-dages forløb',exact:true}).click();await page.waitForURL('**/app');assert.equal((await profile(fresh.id)).data.diet,'vegan');assert.equal((await db().query('SELECT count(*)::int n FROM shaz_days WHERE user_id=$1',[fresh.id])).rows[0].n,100);assert.deepEqual(errors,[]);await context.close();});
+ await check('Concise injury-only onboarding creates and confirms a real stored plan; number fields can be cleared',async()=>{
+  const fresh=await customer('ai-novice'),context=await browser!.newContext({viewport:{width:390,height:844}});
+  const {createGeneratedPlan,applyGeneratedPlan}=await import('../lib/ai/generated-plan-store');
+  const {fixturePlan}=await import('./generated-plan-fixture.mts');
+  await context.addCookies(fresh.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));
+  const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));let generatorCalls=0;
+  await page.route('**/api/ai/plan',async route=>{
+   if(route.request().method()==='GET')return route.fulfill({json:{configuration:{enabled:true,reason:null}}});
+   const input=route.request().postDataJSON();if(input.action!=='generate')return route.continue();
+   try{const data=await createGeneratedPlan(fresh.id,input.profile,input.answers,input.expectedVersion,{sources:[],generator:async(c)=>{generatorCalls++;return{plan:fixturePlan(c),model:'fixture-not-openai',usage:{input:1,output:1}};}});await route.fulfill({json:data});}catch(e){await route.fulfill({status:500,json:{error:String(e)}});}
+  });
+  await page.goto(env.APP_URL+'/onboarding',{waitUntil:'networkidle'});
+  await page.getByRole('button',{name:'18–39 år',exact:true}).click();await page.getByRole('button',{name:'Helt ny',exact:true}).click();
+  await page.getByLabel('Jeg er mindst 18 år.',{exact:true}).check();await page.getByLabel(/Jeg accepterer, at SHAZ gemmer/).check();
+  await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din uge',exact:true}).waitFor();
+  await page.getByLabel('Cardiopas om ugen').selectOption('2');const duration=page.getByLabel('Ønsket varighed (min.)');await duration.fill('');assert.equal(await duration.inputValue(),'');await duration.fill('30');await duration.blur();assert.equal(await duration.inputValue(),'30');await page.getByLabel('Cardiopas om ugen').selectOption('0');
+  await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Skader',exact:true}).waitFor();
+  assert.equal(await page.locator('.concise-injury > fieldset').count(),1);assert.equal(await page.getByText('Er der helbredshensyn til din madplan?',{exact:true}).count(),0);assert.equal(await page.getByText('Hvilke restriktioner har du fået?',{exact:true}).count(),0);
+  await page.getByRole('button',{name:'Nej',exact:true}).click();await page.screenshot({path:'test-artifacts/ai-short-injury-390.png',fullPage:true});
+  await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din mad',exact:true}).waitFor();await page.getByRole('button',{name:'Vegansk',exact:true}).click();
+  await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din plan',exact:true}).waitFor();
+  await page.getByLabel(/Jeg vælger .* som dag 1/).check();await page.getByLabel(/Jeg accepterer, at OpenAI behandler/).check();
+  await page.getByRole('button',{name:'Lav min trænings- og madplan',exact:true}).click();await page.getByRole('heading',{name:'Dit samlede forslag',exact:true}).waitFor();
+  assert.equal(generatorCalls,1);assert.equal((await db().query('SELECT count(*)::int n FROM shaz_days WHERE user_id=$1',[fresh.id])).rows[0].n,0);
+  await page.screenshot({path:'test-artifacts/ai-plan-preview-390.png',fullPage:true});
+  await page.getByRole('button',{name:'Brug denne trænings- og madplan',exact:true}).click();await page.waitForURL('**/app');
+  assert.equal((await profile(fresh.id)).data.diet,'vegan');assert.ok((await profile(fresh.id)).data.aiPlanId);
+  assert.equal((await db().query('SELECT count(*)::int n FROM shaz_days WHERE user_id=$1',[fresh.id])).rows[0].n,100);
+  assert.equal((await db().query('SELECT count(*)::int n FROM shaz_meal_days WHERE user_id=$1',[fresh.id])).rows[0].n,100);
+  const id=(await profile(fresh.id)).data.aiPlanId!;assert.equal((await applyGeneratedPlan(fresh.id,id)).alreadyApplied,true);
+  await assert.rejects(()=>applyGeneratedPlan(active.id,id),/findes ikke/);
+  const before=await profile(fresh.id),saved=(await storedIntake(fresh.id))!;
+  const next=await createGeneratedPlan(fresh.id,before.data,saved,before.version,{sources:[],generator:async c=>({plan:fixturePlan(c),model:'fixture-not-openai',usage:{input:1,output:1}})});
+  const day=(await db().query("SELECT id,plan,day FROM shaz_days WHERE user_id=$1 AND plan->>'kind'='workout' ORDER BY day LIMIT 1",[fresh.id])).rows[0];
+  await db().query("UPDATE shaz_days SET status='completed',log=$2 WHERE id=$1",[day.id,JSON.stringify({sets:[{exercise:day.plan.exercises[0].id,set:1,reps:10,kg:5,effort:7}]})]);
+  const meal=(await db().query('SELECT date::text,data FROM shaz_meal_days WHERE user_id=$1 ORDER BY date LIMIT 1',[fresh.id])).rows[0];meal.data.slots[0].status='eaten';
+  await db().query('UPDATE shaz_meal_days SET data=$3 WHERE user_id=$1 AND date=$2',[fresh.id,meal.date,JSON.stringify(meal.data)]);
+  await applyGeneratedPlan(fresh.id,next.id);
+  assert.equal((await db().query('SELECT status FROM shaz_days WHERE id=$1',[day.id])).rows[0].status,'completed');
+  assert.deepEqual((await db().query('SELECT data FROM shaz_meal_days WHERE user_id=$1 AND date=$2',[fresh.id,meal.date])).rows[0].data,meal.data);
+  assert.deepEqual(errors,[]);await context.close();
+ });
  console.log('ALL CLEAR ONBOARDING CHECKS PASSED');
 }finally{await mkdir('test-artifacts',{recursive:true});await writeFile('test-artifacts/clear-onboarding-results.json',JSON.stringify({commit:process.env.GITHUB_SHA||'local',results},null,2));await browser?.close();server?.kill('SIGTERM');await db().end();await socket.stop();await pg.close();}

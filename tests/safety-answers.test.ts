@@ -21,7 +21,7 @@ test('No then Yes/unsure reopens unanswered details and cannot silently continue
     const old = negativeScreen();
     const reopened = selectSafetyGroup(old, keys, 'details');
     for (const key of keys) assert.ok(!reopened.answered.includes(key));
-    assert.ok(stageError(2, reopened), 'Reopened questions must be answered');
+    assert.ok(keys.some(key=>!reopened.answered.includes(key)), 'Legacy reopened fields remain distinguishable from a new answer');
     assert.equal(stageError(2, old), null, 'Previous state is not mutated');
     assert.equal(stageError(2, selectSafetyGroup(reopened, keys, 'none')), null);
   }

@@ -28,15 +28,18 @@ export default function Privacy() {
           Onboarding gemmer mål, erfaring, udstyr, træningsrytme, kostvalg og
           startdato, så programmet kan tilpasses med faste regler. Træningssæt,
           madplan, favoritter og check-ins gemmes, når du selv registrerer dem.
-          Der bruges ikke en AI-coach til at træffe beslutninger om dig.
+          OpenAI kan lave et forslag til trænings- og madplan. Forslaget aktiveres først, når du selv bekræfter det.
         </p>
         <p>
           Portionsvejledning kræver ingen kropsoplysninger. Ved frivillig
           energiberegning gemmes nødvendige tal efter udtrykkeligt samtykke.
           Frivillige vægtregistreringer kræver særskilt samtykke. Vælg portioner
           eller slet vægtregistreringer under Profil for at trække dette
-          tilbage. Diagnoser og detaljeret sygehistorie indsamles ikke.
+          tilbage. Der kan angives en kort beskrivelse af skader. Undlad CPR, kontaktoplysninger, journaler og unødvendig sygehistorie.
         </p>
+        <h2>OpenAI-planlægning</h2>
+        <p>Efter særskilt accept sendes mål, træningserfaring, målbare mål, kostvalg, planens beregnede rammer og en eventuel kort beskrivelse af skader til OpenAI. Navn og e-mail sendes ikke. Skadebeskrivelsen kan indeholde helbredsoplysninger. PubMed får kun generelle emnesøgninger, ikke dine personlige svar.</p>
+        <p>API-kald bruger store:false, men det garanterer ikke nul opbevaring i leverandørens sikkerhedslogs. Ikke-aktiverede forslag opbevares krypteret med en gyldighed på 24 timer. Dette er fortsat testmiljø; leverandøraftaler og endelige opbevaringsregler skal være på plads før kunder lanceres.</p>
         <h2>Behandlingsgrundlag</h2>
         <p>
           Levering af køb og konto baseres på aftalen; nødvendig
