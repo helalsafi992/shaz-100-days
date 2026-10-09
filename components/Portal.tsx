@@ -564,6 +564,8 @@ function FoodLibrary({
         >
           <option value="all">Alle egnede</option>
           <option value="vegetarian">Vegetarisk</option>
+          <option value="vegan">Vegansk</option>
+          <option value="pescatarian">Pescetarisk</option>
           <option value="halal">Halal-egnet</option>
         </select>
         <button
