@@ -2086,7 +2086,8 @@ try {
         assert.equal(response?.status(), 200);
         const buttons = page.locator(".shaz-personalize .shaz-choice-row > button");
         await buttons.first().waitFor({ state: "visible" });
-        assert.ok((await buttons.count()) >= 18, "Missing the adaptive choice tiles");
+        assert.ok((await buttons.count()) >= 10, "Core goal, age and experience options missing");
+        assert.equal(await page.locator(".goal-yes-no > button").count(), 2, "A measurable goal must unfold from one yes/no choice");
         const metrics = await page.locator(".shaz-choice-row").first().evaluate((row) => {
           const buttons = Array.from(row.querySelectorAll<HTMLButtonElement>("button"));
           const r1 = buttons[0].getBoundingClientRect();
