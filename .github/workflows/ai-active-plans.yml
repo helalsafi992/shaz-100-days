@@ -1,0 +1,64 @@
+name: SHAZ actual AI plan validation
+on:
+  push:
+    branches: [feat/ai-generated-active-plans]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: shaz-ai-active-plan-validation
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ai-generated-active-plans
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Materialize guarded source changes
+        run: |
+          node scripts/apply-ai-plan-v2.mjs
+          node scripts/apply-ai-plan-tests.mjs
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:integration
+      - name: Complete onboarding, model fixture, actual storage and history preservation
+        run: node --import tsx scripts/intake-regression.mts
+      - name: Commit verified source changes only on this feature branch
+        if: success()
+        run: |
+          git add app/onboarding-polish.css app/privacy/page.tsx components/CardioSettings.tsx lib/profile.ts scripts/intake-regression.mts tests/safety-answers.test.ts docs/AI_PLAN_V2_SOURCE_APPLIED.md
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Materialize validated active AI plan source and regressions'
+            git push origin HEAD:feat/ai-generated-active-plans
+          fi
+      - name: Tested source and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-ai-plan-evidence
+          path: |
+            test-artifacts
+            app
+            components
+            lib
+            migrations
+            scripts
+            tests
+            docs
+            package.json
+            package-lock.json
+            tsconfig.json
+            next.config.ts
+          retention-days: 7
