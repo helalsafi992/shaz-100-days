@@ -1,0 +1,47 @@
+name: SHAZ staging direct plan validation
+on:
+  push:
+    branches: [fix/demo-immediate-personal-plan]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: shaz-demo-plan-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Record exact tested commit
+        run: |
+          mkdir -p test-artifacts
+          git rev-parse HEAD > test-artifacts/tested-commit.txt
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit and domain tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Existing browser and database tests
+        run: npm run test:integration
+      - name: Coach-review protection and safety regression
+        run: node --import tsx scripts/intake-regression.mts
+      - name: Direct demo preview, self-activation and protected production gate
+        run: node --import tsx scripts/demo-delivery-regression.mts
+      - name: Preserve test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shaz-direct-demo-evidence
+          path: test-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
