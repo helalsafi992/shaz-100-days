@@ -187,6 +187,7 @@ export default function Onboarding({
               setPlanPreview(null);
             }}
           />
+          <PreferredExerciseQuestions value={answers} onChange={setAnswers}/>
         )}
         {step === 3 && (
           <>
