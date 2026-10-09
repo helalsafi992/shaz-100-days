@@ -6,6 +6,7 @@ import {recipes} from '@/lib/recipes';
 import {activitySettings} from '@/lib/activity-settings';
 import {deficitLevels} from '@/lib/nutrition';
 import {intakeVersion} from '@/lib/ai/intake';
+import {onboardingRequest} from '@/lib/onboarding-request';
 import type {IntakeDraft} from '@/lib/ai/intake-draft';
 import TrainingSettings from './TrainingSettings';
 import ActivitySettings from './ActivitySettings';
@@ -16,22 +17,50 @@ type Review={sources?:{pmid:string;title:string;year:string;url:string}[];propos
 export default function Onboarding({initial,initialStep=0,initialVersion=1,editing=false}:{initial:Profile;initialStep?:number;initialVersion?:number;editing?:boolean}){
  const[p,setP]=useState<Profile>({...defaults,...initial,...activitySettings(initial),personalizationVersion:intakeVersion});
  const[step,setStep]=useState(initialStep>=7?4:initialStep>=4?3:initialStep>=1?1:0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[planPreview,setPlanPreview]=useState<any>(null),[startConfirmed,setStartConfirmed]=useState(editing);
- const[answers,setAnswers]=useState<WizardAnswers>(()=>newAnswers(initial)),[intakeLoaded,setIntakeLoaded]=useState(false);
+ const[answers,setAnswers]=useState<WizardAnswers>(()=>newAnswers(initial)),[intakeLoaded,setIntakeLoaded]=useState(false),[intakeLoading,setIntakeLoading]=useState(false),[intakeLoadError,setIntakeLoadError]=useState('');
  const[aiInfo,setAiInfo]=useState<{configured:boolean;questionsApproved:boolean;privacyApproved:boolean}|null>(null),[aiBusy,setAiBusy]=useState(false),[aiReview,setAiReview]=useState<Review|null>(null);const revision=useRef(0);
  useEffect(()=>{revision.current++;setPlanPreview(null);setAiReview(null);setError('');},[p,answers]);
  useEffect(()=>{document.querySelector('.onboard-shell')?.scrollIntoView({block:'start'});},[step]);
- useEffect(()=>{let alive=true;fetch('/api/ai/intake',{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('Dine gemte svar kunne ikke hentes. Genindlæs siden.');return r.json();}).then((d:{draft:IntakeDraft|null})=>{if(!alive)return;if(d.draft)setAnswers(a=>restoreAnswers(a,d.draft!));setIntakeLoaded(true);}).catch(e=>{if(alive)setError(e instanceof Error?e.message:'Svarene kunne ikke hentes.');});fetch('/api/ai/personalize',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(alive&&d?.configuration)setAiInfo(d.configuration);}).catch(()=>{});return()=>{alive=false;};},[]);
- async function persistIntake(includeSafety:boolean){const r=await fetch('/api/ai/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(asDraft(answers,includeSafety))});const d=await r.json();if(!r.ok)throw Error(d.error||'Svarene kunne ikke gemmes.');}
+ async function loadSavedIntake(active:()=>boolean=()=>true){
+  setIntakeLoading(true);
+  setIntakeLoadError('');
+  try{
+    const d=await onboardingRequest<{draft:IntakeDraft|null}>('/api/ai/intake',{cache:'no-store'});
+    if(!active())return;
+    if(d.draft)setAnswers(a=>restoreAnswers(a,d.draft!));
+    setIntakeLoaded(true);
+  }catch{
+    if(active())setIntakeLoadError('Kunne ikke hente dine gemte svar. Kontrollér forbindelsen, og prøv igen. Vi har ikke ændret din plan.');
+  }finally{
+    if(active())setIntakeLoading(false);
+  }
+ }
+ useEffect(()=>{let alive=true;void loadSavedIntake(()=>alive);return()=>{alive=false;};},[]);
+ // The optional, more expensive AI status request belongs only on the final step.
+ useEffect(()=>{if(step!==4)return;let alive=true;
+  void onboardingRequest<{configuration:{configured:boolean;questionsApproved:boolean;privacyApproved:boolean}}>('/api/ai/personalize',{cache:'no-store'},{attempts:2})
+   .then(d=>{if(alive&&d.configuration)setAiInfo(d.configuration);})
+   .catch(()=>{if(alive)setAiInfo(null);});
+  return()=>{alive=false;};
+ },[step]);
+ useEffect(()=>{if(intakeLoaded||intakeLoading||!intakeLoadError)return;
+  const recover=()=>{void loadSavedIntake();};
+  window.addEventListener('online',recover);
+  return()=>window.removeEventListener('online',recover);
+ },[intakeLoaded,intakeLoading,intakeLoadError]);
+ async function persistIntake(includeSafety:boolean){await onboardingRequest<{ok:boolean}>('/api/ai/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(asDraft(answers,includeSafety))});}
  function field<K extends keyof Profile>(k:K,v:Profile[K]){setP(x=>({...x,...(k==='nutrition'&&v==='calculated'?{...activitySettings(x)}:{}),[k]:v}));}
  async function requestAIReview(){if(!aiInfo?.configured||!aiInfo.privacyApproved||!aiInfo.questionsApproved)return;const requestRevision=revision.current;setAiBusy(true);setError('');try{if(!answers.aiConsent)throw Error('Vælg frivillig AI-vurdering først.');await persistIntake(true);const draft=asDraft(answers,true),intake={...draft,profile:p,dietPattern:p.diet==='halal'?'all':p.diet};const r=await fetch('/api/ai/personalize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({intake,expectedProfileVersion:initialVersion})});const d=await r.json();if(!r.ok)throw Error(d.error||'AI-forslaget kunne ikke hentes.');if(requestRevision!==revision.current)throw Error('Dine svar blev ændret imens. Hent et nyt forslag.');setAiReview(d);}catch(e){setError(e instanceof Error?e.message:'AI-forslaget kunne ikke hentes.');}finally{setAiBusy(false);}}
  async function save(next:number,activate=false){setBusy(true);setError('');const requestRevision=revision.current;try{if(!intakeLoaded)throw Error('Vent mens dine svar indlæses.');const problem=stageError(step,answers)||(step>=3?stageError(2,answers):null);if(problem)throw Error(problem);if([0,2,3,4].includes(step))await persistIntake(step>=2);if(editing&&!activate){setStep(next);return;}if(editing&&activate){const r=await fetch('/api/plan/'+(planPreview?'training-confirm':'training-preview'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p,expectedVersion:planPreview?.version,fingerprint:planPreview?.fingerprint})});const d=await r.json();if(!r.ok)throw Error(d.error);if(requestRevision!==revision.current)throw Error('Dine svar er ændret. Se ændringerne igen.');if(!planPreview){setPlanPreview(d);return;}location.href='/app';return;}
- const r=await fetch('/api/platform/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p,step:storedSteps[next]})});const d=await r.json();if(!r.ok)throw Error(d.error);if(activate){const a=await fetch('/api/platform/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmStart:true})});const result=await a.json();if(!a.ok)throw Error(result.error);location.href='/app';}else setStep(next);
- }catch(e){setError(e instanceof Error?e.message:'Kunne ikke gemme. Dine valg er bevaret.');}finally{setBusy(false);}}
+ await onboardingRequest('/api/platform/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p,step:storedSteps[next]})});if(activate){const a=await fetch('/api/platform/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmStart:true})});const result=await a.json();if(!a.ok)throw Error(result.error);location.href='/app';}else setStep(next);
+ }catch(e){const message=e instanceof Error?e.message:'Kunne ikke gemme. Dine valg er bevaret.';setError(/load failed|failed to fetch|networkerror/i.test(message)?'Forbindelsen blev afbrudt. Dine indtastede valg er bevaret. Kontrollér, om planen blev gemt, før du prøver igen.':message);}finally{setBusy(false);}}
  function choices<K extends keyof Profile>(key:K,options:Profile[K][],names?:string[]){return <div className="p-choices">{options.map((v,i)=><button type="button" key={String(v)} aria-pressed={p[key]===v} className={p[key]===v?'chosen':''} onClick={()=>field(key,v)}>{names?.[i]||labels[String(v)]||String(v)}</button>)}</div>;}
  const calculation=energy(p),normal=normalizeProfile(p);
  return <main className="portal onboarding" data-profile-version={initialVersion} data-intake-loaded={intakeLoaded}>
- <header className="p-top"><a className="logo" href="/">SHAZ</a><a href="/app">Min konto</a></header>
- <section className="onboard-shell"><div className="onboard-progress"><span>{editing?'TILPAS DIN PLAN':'DIT UDGANGSPUNKT'}</span><span>{step===4?'OPSUMMERING':`DEL ${step+1} AF 4`}</span></div><div className="p-track"><i style={{width:`${((step+1)/5)*100}%`}}/></div><h1>{titles[step]}</h1><p className="p-muted">{editing?'Vi gemmer dine svar som kladde. Den aktive plan ændres først, når du bekræfter. Din historik bevares.':'Svarene gemmes, når du fortsætter. Du kan ændre dine valg senere.'}</p>
+ <header className="p-top onboard-topbar"><a className="logo" href="/">SHAZ</a><strong className="onboard-header-title">{editing?"Tilpas plan":"Opret din plan"}</strong><a className="onboard-back-link" href="/app">Til mit forløb</a></header>
+ <section className="onboard-shell"><div className="onboard-progress"><span>{editing?'TILPAS DIN PLAN':'DIT UDGANGSPUNKT'}</span><span>{step===4?'OPSUMMERING':`DEL ${step+1} AF 4`}</span></div><div className="p-track"><i style={{width:`${((step+1)/5)*100}%`}}/></div><h1>{editing?"Tilpas din plan":titles[step]}</h1>{editing&&<h2 className="onboard-step-heading">{titles[step]}</h2>}<p className="p-muted">{editing?'Vi gemmer dine svar som kladde. Den aktive plan ændres først, når du bekræfter. Din historik bevares.':'Svarene gemmes, når du fortsætter. Du kan ændre dine valg senere.'}</p>
+ {!intakeLoaded&&<section className="p-card onboard-loading" role="status"><p>{intakeLoadError||"Henter dine gemte svar…"}</p>{intakeLoadError&&<button type="button" className="p-secondary" disabled={intakeLoading} onClick={()=>void loadSavedIntake()}>Prøv igen</button>}</section>}
+ {intakeLoaded&&<>
  {step===0&&<GoalQuestions currentWeight={p.weight} value={answers} onChange={setAnswers} onProfileGoal={(goal,level)=>setP(x=>({...x,goal,...(level?{level}:{})}))}/>}
  {step===1&&<><TrainingSettings value={p} onChange={setP}/><PreferredExerciseQuestions value={answers} onChange={setAnswers}/><details className="onboard-disclosure"><summary>Øvelser jeg helst vil undgå ({p.exerciseAvoid?.length||0} valgt)</summary><p className="p-note">Smerter og skader kommer i næste trin. Her vælger du kun efter præference.</p>{exercises.map(e=><label key={e.id} className="p-check"><input type="checkbox" checked={(p.exerciseAvoid||[]).includes(e.id)} onChange={ev=>field('exerciseAvoid',ev.target.checked?[...(p.exerciseAvoid||[]),e.id]:(p.exerciseAvoid||[]).filter(x=>x!==e.id))}/>{e.name}</label>)}</details></>}
  {step===2&&<SafetyQuestions value={answers} onChange={setAnswers}/>}
@@ -49,5 +78,6 @@ export default function Onboarding({initial,initialStep=0,initialVersion=1,editi
  <details className="onboard-disclosure"><summary>Ekstra AI-forslag (valgfrit)</summary><ReviewAIQuestion value={answers} onChange={setAnswers} disabledReason={!aiInfo?.configured?'AI er ikke aktiveret. Din almindelige plan fungerer uden AI.':!aiInfo.privacyApproved?'AI afventer godkendelse af databehandlingen.':!aiInfo.questionsApproved?'AI-spørgsmålene afventer godkendelse.':null}/>
  {answers.aiConsent&&aiInfo?.configured&&aiInfo.privacyApproved&&aiInfo.questionsApproved&&<section><p className="p-note">Forslagene er til gennemgang. De bliver ikke en del af den aktive plan ved at trykke Bekræft ændringer.</p><button type="button" className="p-secondary" disabled={aiBusy||busy} onClick={requestAIReview}>{aiBusy?'Henter forslag…':'Hent AI-forslag'}</button>{aiReview?.proposal&&<div className="p-card"><p>{aiReview.proposal.summary}</p><details><summary>Se forslagene</summary>{aiReview.proposal.choices.map(c=><p key={c.slotId}><b>{exercises.find(e=>e.id===c.selectedId)?.name||recipes.find(r=>r.id===c.selectedId)?.name||'Forslag'}</b>: {c.reason}</p>)}</details><details><summary>Hvorfor denne anbefaling? Se kilder</summary>{(aiReview.sources||[]).filter(s=>aiReview.proposal!.choices.some(c=>c.pmids.includes(s.pmid))).map(s=><p key={s.pmid}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a> · {s.year}</p>)}<p className="p-note">Generel forskning dokumenterer ikke, at en bestemt øvelse er bedst for netop dig.</p></details><p className="p-note">{aiReview.proposal.limitations.join(' · ')}</p></div>}</section>}</details></>}
  {planPreview&&<section className="p-card"><h2>Det ændrer vi</h2><p>{planPreview.explanation}</p><p>{planPreview.changes.length} fremtidige pas ændres. Gennemførte og påbegyndte pas bevares.</p><details><summary>Se de berørte datoer og øvelser</summary>{planPreview.changes.map((c:any)=><div key={c.id}><h3>{c.date}</h3><p>{c.before.title} · {c.before.minutes} min. → {c.after.title} · {c.after.locationName} · {c.after.minutes} min.</p><p>{c.after.exercises.map((e:any)=>e.name).join(' · ')}</p></div>)}</details></section>}{error&&<p className="p-error" role="alert">{error}</p>}
- <div className="p-actions">{step>0&&<button type="button" className="p-secondary" disabled={busy} onClick={()=>setStep(step-1)}>Tilbage</button>}<button type="button" className="p-button" disabled={busy||aiBusy||!intakeLoaded||(step===4&&!startConfirmed)} onClick={()=>save(Math.min(4,step+1),step===4)}>{busy?'Gemmer…':step===4?editing?planPreview?'Bekræft ændringer':'Se ændringer før du gemmer':'Start mit 100-dages forløb':'Gem og fortsæt →'}</button></div></section></main>;
+ <div className="p-actions">{step>0&&<button type="button" className="p-secondary" disabled={busy} onClick={()=>setStep(step-1)}>Tilbage</button>}<button type="button" className="p-button" disabled={busy||aiBusy||!intakeLoaded||(step===4&&!startConfirmed)} onClick={()=>save(Math.min(4,step+1),step===4)}>{busy?'Gemmer…':step===4?editing?planPreview?'Bekræft ændringer':'Se ændringer før du gemmer':'Start mit 100-dages forløb':'Gem og fortsæt →'}</button></div></>}
+ </section></main>;
 }
