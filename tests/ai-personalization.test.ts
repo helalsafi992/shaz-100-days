@@ -26,7 +26,7 @@ test('provider refusal and truncation never become a valid plan',async()=>{const
 test('Owner-review questionnaire is unique, ordered, and never displayed as an approved customer questionnaire',()=>{
  assert.equal(questionnaire.status,'owner-review');
  assert.deepEqual(questionnaireContractIssues(),[]);
- const all=questionnaire.groups.flatMap(g=>g.items);
+ const all=questionnaire.groups.flatMap(g=>(g.items as readonly {id:string}[]).map(item=>({id:item.id})));
  assert.ok(all.length>=38);
  for(const id of ['goal_main','training_place','equipment_home','equipment_gym','strength_days','strength_weekdays','session_schedule','injury_status','injury_triggers','diet_pattern','nutrition_method','deficit','ai_consent']) assert.ok(all.some(q=>q.id===id),id);
  const initial=visibleQuestions({});
