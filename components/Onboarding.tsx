@@ -48,6 +48,9 @@ export default function Onboarding({
     [startConfirmed, setStartConfirmed] = useState(editing);
   const [answers, setAnswers] = useState<WizardAnswers>(() => newAnswers(initial));
   const [intakeLoaded, setIntakeLoaded] = useState(false);
+  const [aiInfo,setAiInfo] = useState<{configured:boolean;questionsApproved:boolean;privacyApproved:boolean}|null>(null);
+  const [aiBusy,setAiBusy] = useState(false);
+  const [aiReview,setAiReview] = useState<{proposal?:{summary:string;limitations:string[];choices:{slotId:string;selectedId:string;reason:string;pmids:string[]}[]}}|null>(null);
   useEffect(() => {
     let active = true;
     fetch("/api/ai/intake", { cache: "no-store" })
@@ -55,6 +58,8 @@ export default function Onboarding({
       .then((d: { draft: IntakeDraft | null }) => { if (active && d.draft) setAnswers(a => restoreAnswers(a, d.draft!)); })
       .catch(e => { if (active) setError(e instanceof Error ? e.message : "Svarene kunne ikke hentes."); })
       .finally(() => { if (active) setIntakeLoaded(true); });
+    fetch("/api/ai/personalize",{cache:"no-store"}).then(r=>r.ok?r.json():null)
+      .then(d=>{if(active&&d?.configuration)setAiInfo(d.configuration);}).catch(()=>{});
     return () => { active = false; };
   }, []);
   async function persistIntake(includeSafety: boolean) {
