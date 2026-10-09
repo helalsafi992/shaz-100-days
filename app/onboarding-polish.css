@@ -197,3 +197,103 @@
   .portal.onboarding .shaz-personalize > .p-card { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .portal.onboarding .shaz-choice-row > button { transition: none; } }
+
+
+/* A measurable goal unfolds only after the person chooses yes. */
+.portal.onboarding .goal-target { grid-column: 1 / -1; }
+.portal.onboarding .goal-yes-no,
+.portal.onboarding .goal-metric-grid,
+.portal.onboarding .goal-unit-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 9px;
+  margin-top: 10px;
+}
+.portal.onboarding .goal-metric-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.portal.onboarding .goal-yes-no button,
+.portal.onboarding .goal-metric-grid button,
+.portal.onboarding .goal-unit-choices button {
+  appearance: none;
+  background: var(--onboard-tint);
+  color: #284331;
+  border: 1px solid #dce5d9;
+  border-radius: 10px;
+  padding: 11px 12px;
+  min-height: 46px;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.portal.onboarding .goal-yes-no button[aria-pressed="true"],
+.portal.onboarding .goal-metric-grid button[aria-pressed="true"],
+.portal.onboarding .goal-unit-choices button[aria-pressed="true"] {
+  background: #e4f3cd;
+  border: 2px solid #356640;
+  color: #193c26;
+  padding: 10px 11px;
+  font-weight: 750;
+}
+.portal.onboarding .goal-yes-no button:focus-visible,
+.portal.onboarding .goal-metric-grid button:focus-visible,
+.portal.onboarding .goal-unit-choices button:focus-visible {
+  outline: 3px solid #376849;
+  outline-offset: 3px;
+}
+.portal.onboarding .goal-small-title {
+  margin: 13px 0 4px;
+  font-weight: 730;
+  color: #2c4834;
+  font-size: 13px;
+}
+.portal.onboarding .goal-extra {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--onboard-line);
+}
+.portal.onboarding .goal-fields {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+  align-items: end;
+  padding-top: 10px;
+}
+.portal.onboarding .goal-fields > label,
+.portal.onboarding .goal-fields > details {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.portal.onboarding .goal-fields input,
+.portal.onboarding .goal-fields select {
+  width: 100%;
+  min-height: 46px;
+  background: #fff;
+  border: 1px solid #d3dfce;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #243f2b;
+}
+.portal.onboarding .goal-fields .goal-full { grid-column: 1/-1; }
+.portal.onboarding .goal-fields .goal-unit-choices { margin-top: 0; max-width: 330px; }
+.portal.onboarding .goal-number > span small { color: #718073; font-weight: 400; }
+.portal.onboarding .goal-fields details summary { cursor: pointer; font-weight: 550; }
+.portal.onboarding .goal-fields .p-note { margin: 6px 0 0; font-weight: 400; line-height: 1.5; }
+.portal.onboarding .goal-target .optional-label { color: #607667; font-size: 12px; font-weight: 500; }
+.portal.onboarding .shaz-injury-details > details.advanced-health { margin-top: 2px; }
+.portal.onboarding .shaz-injury-details > details.advanced-health > summary { min-height: 44px; }
+.portal.onboarding .compact-health .p-muted { max-width: 64ch; }
+@media(max-width:750px) {
+  .portal.onboarding .goal-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:480px) {
+  .portal.onboarding .goal-fields { grid-template-columns: 1fr; }
+  .portal.onboarding .goal-yes-no button, .portal.onboarding .goal-metric-grid button,
+  .portal.onboarding .goal-unit-choices button { min-height: 48px; padding: 10px 8px; }
+}
