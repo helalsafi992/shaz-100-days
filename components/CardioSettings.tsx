@@ -159,7 +159,7 @@ export default function CardioSettings({
             ))}
           </div>
           <p className="p-note">
-            Du vælger selv varigheden. Shaz gennemgår den samlede belastning, før planen udleveres.
+            Du vælger selv varigheden. Tilpas belastningen til din hverdag, og begynd roligt, hvis du ikke er vant til lange pas.
           </p>
         </>
       )}
