@@ -65,7 +65,7 @@ export function restoreAnswers(current:WizardAnswers, saved:IntakeDraft):WizardA
 type Shared={ value:WizardAnswers; onChange:(value:WizardAnswers)=>void };
 function mark(value:WizardAnswers,key:string):string[] {return [...new Set([...value.answered,key])];}
 function Pick<T extends string | number | boolean>({name,title,value,options,onPick,hint}:
- {name:string;title:string;value:T | null;options:{value:T;label:string}[];onPick:(v:T)=>void;hint?:string}) {
+ {name:string;title:string;value:T | null;options:readonly {value:T;label:string}[];onPick:(v:T)=>void;hint?:string}) {
  return <fieldset className="shaz-question"><legend>{title}</legend>
  <div className="shaz-choice-row">{options.map(o=><button key={String(o.value)} type="button"
   aria-pressed={value===o.value} className={value===o.value?"chosen":""}
@@ -73,7 +73,7 @@ function Pick<T extends string | number | boolean>({name,title,value,options,onP
  {hint && <p className="p-note">{hint}</p>}</fieldset>;
 }
 function Multi<T extends string>({title,selected,options,onChange,max,hint}:
- {title:string;selected:T[];options:{value:T;label:string}[];onChange:(s:T[])=>void;max:number;hint?:string}) {
+ {title:string;selected:T[];options:readonly {value:T;label:string}[];onChange:(s:T[])=>void;max:number;hint?:string}) {
  return <fieldset className="shaz-question"><legend>{title}</legend><div className="shaz-checkbox-grid">
  {options.map(o=><label key={o.value} className="p-check"><input type="checkbox" checked={selected.includes(o.value)}
   disabled={!selected.includes(o.value)&&selected.length>=max}
