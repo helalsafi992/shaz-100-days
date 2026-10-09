@@ -177,19 +177,8 @@ export default function Onboarding({
             ? "Ændringer gælder fremtidige, ikke påbegyndte træninger. Din historik bevares."
             : "Dine valg gemmes på din konto, når du fortsætter. Du kan vende tilbage på en anden enhed."}
         </p>
-        {step === 0 && (
-          <>
-            <h2>Hvad vil du arbejde mod?</h2>
-            {choices("goal", ["fat-loss", "muscle", "fitness", "maintain"])}
-            <h2>Din træningserfaring</h2>
-            {choices("level", ["beginner", "intermediate", "experienced"])}
-            <p className="p-note">
-              Et selvstyret forløb for voksne. Ved skader, sygdom, graviditet
-              eller andre særlige behov skal en relevant fagperson vurdere, om
-              træningen passer til dig. Skriv ikke diagnoser her.
-            </p>
-          </>
-        )}
+        {step === 0 && <GoalQuestions value={answers} onChange={setAnswers}
+          onProfileGoal={(goal,level)=>setP(x=>({...x,goal,...(level?{level}:{})}))}/>}
         {step === 1 && (
           <TrainingSettings
             value={p}
