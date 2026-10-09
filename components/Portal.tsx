@@ -195,10 +195,10 @@ export default function Portal({
       <main className="p-main" id="customer-content">
         {state.reviewMode && (
           <details className="s-review">
-            <summary>Testkonto · indhold afventer godkendelse</summary>
+            <summary>Testkonto · demonstrationsmiljø</summary>
             <p>
               Dette er det isolerede testmiljø. Trænings- og ernæringsregler er
-              til gennemgang, og der er ikke registreret faglig godkendelse.
+              til afprøvning. Indholdet er ikke et individuelt sundhedsfagligt behandlingstilbud.
               Ingen rigtige betalinger.
             </p>
           </details>
