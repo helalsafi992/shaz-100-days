@@ -1,3 +1,4 @@
+import { questionnaire, questionnaireContractIssues, visibleQuestions } from '../lib/ai/questionnaire';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaults } from '../lib/profile';
@@ -20,3 +21,29 @@ test('PubMed maps PMID metadata to abstracts without a full-text claim',async()=
 test('evidence errors are not misreported as no studies; response size is bounded',async()=>{await assert.rejects(fetchEvidence('strength',{fetcher:(async()=>Response.json({error:'rate limit'})) as typeof fetch}));await assert.rejects(boundedText(new Response('123456'),3));});
 test('OpenAI request is structured, stateless, bounded and has no browsing/write tools',async()=>{let payload:any;const fake=(async(_url:unknown,init:RequestInit)=>{payload=JSON.parse(String(init.body));return Response.json({status:'completed',model:'test-model',usage:{input_tokens:100,output_tokens:100},output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(proposal())}]}]});}) as typeof fetch;const v=sample();await openAIProposal(v,slots,sources,{apiKey:'fixture-not-a-real-key',model:'test-model',fetcher:fake});assert.equal(payload.store,false);assert.equal(payload.tools,undefined);assert.equal(payload.text.format.strict,true);assert.equal(payload.max_output_tokens,3500);v.aiConsent=false;await assert.rejects(openAIProposal(v,slots,sources,{apiKey:'fixture',model:'fixture',fetcher:fake}));});
 test('provider refusal and truncation never become a valid plan',async()=>{const fake=(async()=>Response.json({status:'incomplete',output:[]})) as typeof fetch;await assert.rejects(openAIProposal(sample(),slots,sources,{apiKey:'fixture',model:'fixture',fetcher:fake}));});
+
+
+test('Owner-review questionnaire is unique, ordered, and never displayed as an approved customer questionnaire',()=>{
+ assert.equal(questionnaire.status,'owner-review');
+ assert.deepEqual(questionnaireContractIssues(),[]);
+ const all=questionnaire.groups.flatMap(g=>g.items);
+ assert.ok(all.length>=38);
+ for(const id of ['goal_main','training_place','equipment_home','equipment_gym','strength_days','strength_weekdays','session_schedule','injury_status','injury_triggers','diet_pattern','nutrition_method','deficit','ai_consent']) assert.ok(all.some(q=>q.id===id),id);
+ const initial=visibleQuestions({});
+ for(const id of ['equipment_home','equipment_gym','session_schedule','injury_area','deficit']) assert.ok(!initial.some(q=>q.id===id),id);
+});
+
+test('Conditional questions disclose exactly the relevant exercise, injury and calorie options',()=>{
+ const ids=(answers:Parameters<typeof visibleQuestions>[0])=>visibleQuestions(answers).map(q=>q.id);
+ assert.ok(ids({training_place:'home'}).includes('equipment_home'));
+ assert.ok(!ids({training_place:'home'}).includes('equipment_gym'));
+ assert.ok(ids({training_place:'both'}).includes('equipment_home'));
+ assert.ok(ids({training_place:'both'}).includes('equipment_gym'));
+ assert.ok(ids({strength_days:3}).includes('session_schedule'));
+ assert.ok(!ids({strength_days:0}).includes('session_schedule'));
+ assert.ok(ids({injury_status:'current'}).includes('injury_triggers'));
+ assert.ok(!ids({injury_status:'none'}).includes('injury_triggers'));
+ assert.ok(ids({nutrition_method:'calculated',goal_main:'fat-loss'}).includes('deficit'));
+ assert.ok(!ids({nutrition_method:'portions',goal_main:'fat-loss'}).includes('deficit'));
+ assert.ok(!ids({nutrition_method:'calculated',goal_main:'hypertrophy'}).includes('deficit'));
+});
