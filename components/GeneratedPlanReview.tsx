@@ -63,7 +63,7 @@ export default function GeneratedPlanReview({profile,answers,expectedVersion,sta
    window.location.assign("/app");
   }catch(e){setError(e instanceof Error?e.message:"Planen kunne ikke gemmes. Dine tidligere registreringer er bevaret.");setApplying(false);}
  }
- const coachMode=configuration?.mode==="coach-review";
+ const coachMode=configuration ? configuration.mode!=="generate-and-confirm" : false;
  return <section className="generated-plan coach-client-flow" aria-label="Din personlige trænings- og madplan">
   <h2>Din personlige plan</h2>
   <p>{coachMode?"Dine valg sendes til Shaz, som gennemgår planen, før den udleveres.":"Din træning og madplan bliver tilpasset dine mål, træningsdage, udstyr, kostvalg og eventuelle skader. Du får planen vist, inden du vælger at bruge den."}</p>
