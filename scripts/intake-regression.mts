@@ -94,7 +94,7 @@ try{
   await context.addCookies(fresh.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));
   const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));let generatorCalls=0;
   await page.route('**/api/ai/plan',async route=>{
-   if(route.request().method()==='GET')return route.fulfill({json:{configuration:{enabled:true,reason:null}}});
+   if(route.request().method()==='GET')return route.fulfill({json:{configuration:{enabled:true,reason:null,mode:'coach-review'}}});
    const input=route.request().postDataJSON();if(input.action!=='generate')return route.continue();
    try{const data=await createGeneratedPlan(fresh.id,input.profile,input.answers,input.expectedVersion,{sources:[],generator:async(c)=>{generatorCalls++;return{plan:fixturePlan(c),model:'fixture-not-openai',usage:{input:1,output:1}};}});await route.fulfill({json:data});}catch(e){await route.fulfill({status:500,json:{error:String(e)}});}
   });
@@ -160,6 +160,25 @@ try{
   await publishReviewedPlan(coach.id,next.id,1);
   assert.equal((await db().query('SELECT status FROM shaz_days WHERE id=$1',[day.id])).rows[0].status,'completed');
   assert.deepEqual((await db().query('SELECT data FROM shaz_meal_days WHERE user_id=$1 AND date=$2',[fresh.id,meal.date])).rows[0].data,meal.data);
+  // Upcoming sessions allow planning swaps, but never record future sets.
+  const future=(await db().query("SELECT id,log,plan FROM shaz_days WHERE user_id=$1 AND day BETWEEN 8 AND 14 AND plan->>'kind'='workout' ORDER BY day LIMIT 1",[fresh.id])).rows[0];
+  await page.goto(env.APP_URL+'/app/training?week=2',{waitUntil:'networkidle'});
+  await page.locator('.s-activity-wrap .s-activity').first().click();
+  const swap=page.getByRole('button',{name:'Skift øvelse',exact:true});
+  assert.ok(await swap.isEnabled(),'Future planning must not share the set-recording lock');
+  assert.ok(await page.locator('.set-row input').first().isDisabled(),'Future performance cannot be recorded');
+  await swap.click();
+  const opts=page.locator('.exercise-option');
+  assert.ok(await opts.count()>0 && await opts.count()<=3);
+  await page.screenshot({path:'test-artifacts/future-exercise-options-390.png',fullPage:true});
+  const response=page.waitForResponse(r=>r.url().includes('/api/platform/swap-exercise')&&r.request().method()==='POST');
+  await opts.first().click();
+  assert.equal((await response).status(),200);
+  await page.getByRole('dialog',{name:'Træningspas'}).waitFor({state:'hidden'});
+  const afterFuture=(await db().query('SELECT plan,log FROM shaz_days WHERE id=$1',[future.id])).rows[0];
+  assert.notEqual(afterFuture.plan.exercises[0].id,future.plan.exercises[0].id);
+  assert.deepEqual(afterFuture.log,future.log,'A future swap must not invent recorded sets');
+  assert.equal((await db().query('SELECT count(*)::int n FROM shaz_workout_drafts WHERE day_id=$1',[future.id])).rows[0].n,0);
   assert.deepEqual(errors,[]);await context.close();
  });
  await check('Cardio editor exposes 0–7 days and accepts 90 minutes without forced clamp on iPhone-size screen',async()=>{

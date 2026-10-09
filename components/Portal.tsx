@@ -769,6 +769,8 @@ function Workout({
 }) {
   const readonly =
     state.day > 100 || day.scheduled_date > state.today || state.day < 1;
+  // Planning future exercise alternatives is separate from recording future sets.
+  const canSwap = state.day <= 100 && day.scheduled_date >= state.today && day.status !== "completed" && !day.plan.paused;
   const savedDraft = state.drafts?.find((d) => d.day_id === day.id);
   const startSets = [...(savedDraft?.data.sets || day.log.sets || [])];
   for (const e of day.plan.exercises)
@@ -1086,8 +1088,8 @@ function Workout({
                 >
                   Pause · {e.rest} sek.
                 </button>
-                {day.status !== "completed" && <ExerciseSwapButton exercise={e} options={options} disabled={busy||readonly} onSwap={async replacement=>{
-                  if(!(await flush()))throw Error("Dine sæt kunne ikke gemmes. Prøv igen før du skifter øvelse.");
+                {day.status !== "completed" && <ExerciseSwapButton exercise={e} options={options} disabled={busy||!canSwap} onSwap={async replacement=>{
+                  if(!readonly && !(await flush()))throw Error("Dine sæt kunne ikke gemmes. Prøv igen før du skifter øvelse.");
                   if(!(await action("swap-exercise",{id:day.id,exercise:e.id,replacement})))throw Error("Øvelsen kunne ikke skiftes.");
                   close();
                 }}/>}
