@@ -174,7 +174,7 @@ export default function GoalTarget({
 
             {target.metric !== "consistent-weeks" && (
               <NumberField
-                key={target.metric + "-baseline"}
+                key={target.metric + "-baseline-" + unit}
                 label={target.metric === "weight-kg" ? "Din vægt nu" : target.metric === "run-km" ? "Så langt kan du gå eller løbe nu" : "Vægt du løfter nu"}
                 value={target.baseline ?? (target.metric === "weight-kg" ? currentWeight : null)}
                 unit={unit}
@@ -182,7 +182,7 @@ export default function GoalTarget({
               />
             )}
             <NumberField
-              key={target.metric + "-goal"}
+              key={target.metric + "-goal-" + unit}
               label={target.metric === "weight-kg" ? "Din ønskede vægt" : target.metric === "run-km" ? "Den distance du vil kunne klare" : target.metric === "exercise-kg" ? "Vægt du vil kunne løfte" : "Uger i træk med din plan"}
               value={target.value}
               unit={unit}
