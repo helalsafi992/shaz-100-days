@@ -166,7 +166,7 @@ export default function Onboarding({
       <section className="onboard-shell">
         <div className="onboard-progress">
           <span>{editing ? "TILPAS DIN PLAN" : "DIT UDGANGSPUNKT"}</span>
-          <span>{step === 3 ? "OPSUMMERING" : `DEL ${step + 1} AF 3`}</span>
+          <span>{step === 4 ? "OPSUMMERING" : `DEL ${step + 1} AF 4`}</span>
         </div>
         <div className="p-track">
           <i style={{ width: `${((step + 1) / 4) * 100}%` }} />
