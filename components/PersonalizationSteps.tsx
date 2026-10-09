@@ -2,6 +2,7 @@
 import { useState } from "react";
 import GoalTarget from "./GoalTarget";
 import { measurableGoalError } from "@/lib/goal-units";
+import { exerciseScreenKeys, foodScreenKeys, selectSafetyGroup, selectInjuryStatus } from "@/lib/ai/safety-answers";
 import type { Profile } from "@/lib/profile";
 import { exercises } from "@/lib/training";
 import { intakeVersion, wishesSchema, safetySchema } from "@/lib/ai/intake";
@@ -40,14 +41,14 @@ export function SafetyQuestions({value,onChange}:Shared){
  const update=(next:Partial<typeof s>,key?:string)=>onChange({...value,safety:{...s,...next},answered:key?mark(value,key):value.answered});const injury=(next:Partial<typeof inj>,key?:string)=>update({injury:{...inj,...next}},key);
  const statusOpts=[{value:'none',label:'Ingen gener'},{value:'resolved',label:'Tidligere, overstået'},{value:'current',label:'Aktuelle gener'},{value:'postoperative',label:'Opereret/i genoptræning'}]as const;
  const questions:{key:Exclude<keyof typeof s,'injury'>;title:string}[]=[{key:'urgentSymptoms',title:'Har du alvorlige, pludselige eller uforklarede symptomer lige nu?'},{key:'exertionalSymptoms',title:'Har du uforklarede symptomer ved fysisk aktivitet?'},{key:'medicalExerciseRestriction',title:'Har en læge eller fysioterapeut begrænset din træning?'},{key:'pregnancyOrPostpartum',title:'Er graviditet, nylig fødsel eller amning relevant?'},{key:'medicalDietNeeded',title:'Har du behov for en individuelt medicinsk tilpasset kost?'},{key:'calorieTrackingConcern',title:'Kan kalorietælling eller vægttab være uhensigtsmæssigt for dig?'},{key:'severeFoodAllergy',title:'Har du en alvorlig allergi, hvor spor kan give problemer?'}];
- const exerciseKeys=['urgentSymptoms','exertionalSymptoms','medicalExerciseRestriction']as const,foodKeys=['pregnancyOrPostpartum','medicalDietNeeded','calorieTrackingConcern','severeFoodAllergy']as const;
+ const exerciseKeys=exerciseScreenKeys,foodKeys=foodScreenKeys;
  const answeredGroup=(keys:readonly string[])=>keys.every(k=>value.answered.includes(k));
- const answerGroup=(keys:readonly(keyof Omit<typeof s,'injury'>)[],open:boolean)=>{if(open)return;onChange({...value,safety:{...s,...Object.fromEntries(keys.map(k=>[k,'no']))},answered:[...new Set([...value.answered,...keys])]});};
+ const answerGroup=(keys:readonly(keyof Omit<typeof s,'injury'>)[],open:boolean)=>onChange(selectSafetyGroup(value,keys,open?'details':'none'));
  const exerciseHasDetails=exerciseOpen||exerciseKeys.some(k=>value.answered.includes(k)&&s[k]!=='no'),foodHasDetails=foodOpen||foodKeys.some(k=>value.answered.includes(k)&&s[k]!=='no');
  return <section className="shaz-personalize compact-health"><p className="p-muted">Tre korte områder. Vi spørger kun videre, når et svar kræver det. Du får ikke en diagnose eller genoptræningsplan her.</p>
  <Pick name="exercise-screen" title="Er der noget ved dit helbred, der begrænser træning?" value={exerciseHasDetails?'details':answeredGroup(exerciseKeys)?'none':null} options={[{value:'none',label:'Nej, ingen af delene'},{value:'details',label:'Ja eller jeg er i tvivl'}]} hint="Gælder alvorlige symptomer nu, brystsmerter/besvimelse/usædvanlig åndenød ved aktivitet, eller begrænsninger fra læge/fysioterapeut." onPick={x=>{setExerciseOpen(x==='details');answerGroup(exerciseKeys,x==='details');}}/>
  {exerciseHasDetails&&<div className="shaz-injury-details" aria-label="Spørgsmål om træning og helbred">{questions.filter(q=>exerciseKeys.some(k=>k===q.key)).map(item=><Pick key={item.key} name={item.key} title={item.title} value={value.answered.includes(item.key)?s[item.key]:null} options={yesNo} onPick={x=>update({[item.key]:x},item.key)}/>)}</div>}
- <Pick name="injurystatus" title="Har du smerter, en skade eller er du i gang med genoptræning?" value={value.answered.includes('injury.status')?inj.status:null} options={statusOpts} onPick={x=>injury(x==='none'?{...baseInjury}:{...baseInjury,status:x},'injury.status')}/>
+ <Pick name="injurystatus" title="Har du smerter, en skade eller er du i gang med genoptræning?" value={value.answered.includes('injury.status')?inj.status:null} options={statusOpts} onPick={x=>onChange(selectInjuryStatus(value,x))}/>
  {inj.status!=='none'&&value.answered.includes('injury.status')&&<div className="shaz-injury-details">
  <Multi title="Hvor sidder generne?" selected={inj.areas} options={areas.map(([value,label])=>({value,label}))} onChange={areas=>injury({areas})} max={5}/>
  <Pick name="side" title="Hvilken side?" value={inj.side} options={[{value:'left',label:'Venstre'},{value:'right',label:'Højre'},{value:'both',label:'Begge'},{value:'not-applicable',label:'Ikke relevant'}]} onPick={side=>injury({side},'injury.side')}/>
