@@ -16,6 +16,6 @@ export default function AISmokeTest(){
     <h1>AI-forbindelse: isoleret test</h1>
     <p>Et fiktivt eksempel kontrollerer PubMed og OpenAI. Ingen kontooplysninger bliver sendt eller ændret.</p>
     <button type="button" onClick={run} disabled={busy}>{busy?"Tester…":"Kør test med fiktive data"}</button>
-    {output&&<pre role="status" style={{whiteSpace:"pre-wrap"}}>{JSON.stringify(output,null,2)}</pre>}
+    {output !== null && <pre role="status" style={{whiteSpace:"pre-wrap"}}>{JSON.stringify(output,null,2)}</pre>}
   </section>;
 }
