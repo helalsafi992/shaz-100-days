@@ -73,8 +73,8 @@ test("calendar days respect Copenhagen dates across DST and day 101", () => {
   assert.equal(phase(66), "Konsistens");
   assert.equal(phase(86), "Status & næste skridt");
 });
-test("38 recipes, documented nutrition, scaling and exclusions", () => {
-  assert.equal(recipes.length, 38);
+test("50 recipes, nutrition sources, vegan eligibility and exclusions", () => {
+  assert.equal(recipes.length, 50);
   for (const cat of ["breakfast", "lunch", "dinner", "snack"])
     assert.ok(recipes.filter((r) => r.category === cat).length >= 6);
   for (const r of recipes) {
@@ -88,7 +88,7 @@ test("38 recipes, documented nutrition, scaling and exclusions", () => {
   const p = ingredients.find((i) => i.id === "banana")!;
   assert.equal(p.per100g.kcal, 89);
   assert.equal(p.per100g.protein, 1.09);
-  const vegetarian = recipes.filter((r) =>
+  for (const cat of ["breakfast","lunch","dinner","snack"] as const) {\n    const vegan = recipes.filter(r => r.category === cat && suitable(r, "vegan", [], 60));\n    assert.ok(vegan.length >= 3, `Missing vegan alternatives for ${cat}: ${vegan.length}`);\n  }\n  assert.ok(recipes.some(r => suitable(r,"pescatarian",[],60) && !suitable(r,"vegetarian",[],60)));\n  const vegetarian = recipes.filter((r) =>
     suitable(r, "vegetarian", ["milk"], 60),
   );
   assert.ok(vegetarian.length >= 5);
