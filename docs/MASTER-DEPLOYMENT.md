@@ -67,3 +67,16 @@ Commit `8f038c68bdf62a3ddd48ed7f235ac8b4dc1c1527`:
 - Serverpreview for 2/3/4/5/6 måltider bevarede målet 2635 kcal. Planernes beregnede totaler var 2639/2632/2635/2658/2640 kcal, med tre forskellige forslag pr. plads og praktisk afrunding.
 - Browserkontrollen fandt en ældre UI-fejl: beregnerens standardfelter erstattede den gemte faktor 1,6 med 1,55. Ingen ændring blev bekræftet på ejertestkontoen. Derfor blev f42eea3 ikke fremført til produktion alene.
 - Rettelsen genbruger aktivitetsindstillingerne, indtil kunden aktivt vælger en ny vurdering. Den samme komponent bruges i onboarding og madberegneren. De efterfølgende 21 domænegrupper og 35 integrationstestgrupper består, inklusive alle fem måltidsantal gennem browseren, bevaret mål efter bekræftelse og den præcise 160/102/0-proteinvisning.
+
+## e81f89e — rettelsen verificeret i begge miljøer
+
+Implementeringscommit: `e81f89e2fdc7f67e056182453d8c2f0a26206901`.
+
+- Test: `fed775c6-e22a-4b8c-9c36-8326edf759ea`, SUCCESS. Health 200 med commit.
+- Produktion: `5ed8cac7-8126-4702-a161-309082412bde`, SUCCESS. Offentlig health 200 med samme commit.
+- Ny almindelig password-session i test: login 200, 100 programdage, tre-måltids-preview med mål 2635 og beregnet 2632,1 kcal, logout 200 og efterfølgende adgang afvist med 401. Ingen profilændring gemt.
+- Faktisk indlogget Railway-browser: beregneren bevarer faktor 1,6 og mål 2635 ved åbning. Tre måltider viser mål 2635, total 2632 kcal og 165 g protein. Annullering bevarer fire gemte måltider og total 2647 kcal. Dashboard viser dag 2, restitution og separat planlagt/spist indtag.
+- Offentlig forside genindlæst: korrekt SHAZ-overskrift, login i header, 399 kr. én gang og tydeligt lukket salg. Ingen reel opkrævning aktiveret.
+- Evidens: `deployed-desktop-calorie-preview-e81f89e.jpg` og `deployed-desktop-dashboard-e81f89e.jpg`.
+
+En efterfølgende evidenscommit ændrer kun dokumenter/skærmbilleder, ikke appkode, database eller testadgang. Den automatiske deployment af denne commit kontrolleres særskilt ved aflevering. De 21 domænegrupper og 35 integrationstestgrupper er fortsat kodegrundlaget. Dette er ikke en påstand om 41/41 fuldt bestået.
