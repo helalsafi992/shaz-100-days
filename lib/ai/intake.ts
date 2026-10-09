@@ -48,6 +48,8 @@ export const intakeSchema = z.object({
   if(i.status==="none" && (i.pain>0 || i.areas.length || i.restrictions.length || i.triggers.length || i.afterReaction!=="none" || i.duration!=="none" || i.worsening!=="no" || i.dailyLimitation!=="no")) fail("Svarene om skader er modstridende. Kontrollér dem før planen laves.");
   if(i.status!=="none" && !i.areas.length) fail("Vælg området for din skade eller gene.");
   if(v.profile.age && v.profile.age<18) fail("Dette forløb er til voksne.");
+  const actualDiet=v.profile.diet==="halal"?"all":v.profile.diet;
+  if(v.dietPattern!==actualDiet)fail("Kosttype og profilens faktiske opskriftsfilter stemmer ikke overens. Ret valgene før AI-planen beregnes.");
   if(v.profile.age) {const band=v.profile.age<40?"18-39":v.profile.age<65?"40-64":"65-plus";if(v.wishes.ageBand!==band)fail("Alder og aldersgruppe stemmer ikke overens.");}
   if(v.wishes.target.metric!=="none" && (v.wishes.target.value===null || v.wishes.target.weeks===null)) fail("Angiv dit ønskede mål og tidshorisont, eller vælg intet talmål.");
   if(v.wishes.target.metric==="weight-kg" && !v.profile.weight)fail("Et vægtmål kræver et udgangspunkt, ellers vælg et andet succeskriterium.");
