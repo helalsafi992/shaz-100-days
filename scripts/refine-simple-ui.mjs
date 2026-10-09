@@ -8,8 +8,11 @@ fs.writeFileSync('components/customer/SimpleExperience.tsx',ui);
 let selectors=fs.readFileSync('lib/experience-summary.ts','utf8');
 selectors=selectors.replace('kind?: string; paused?: boolean','kind?: string; paused?: boolean; selected?: unknown');
 fs.writeFileSync('lib/experience-summary.ts',selectors);
+let food=fs.readFileSync('components/FoodPlanner.tsx','utf8');
+food=food.replace('day.target ? numberLabel(day.target) : "Portionsplan"','day.target ? numberLabel(day.target) : "Uden mål"');
+fs.writeFileSync('components/FoodPlanner.tsx',food);
 fs.appendFileSync('app/customer-simple.css', `
-/* Native select intrinsic sizing must not displace the week controls at 320px. */
+/* Native select intrinsic sizing must not displace controls at 320px. */
 .s-workspace .s-week-control > label { flex: 1; min-width: 0; }
 .s-workspace .s-week-control > button { flex: 0 0 44px; }
 .s-workspace .s-week-control select { width: 100%; min-width: 0; padding-inline: 4px; }
@@ -20,18 +23,25 @@ fs.appendFileSync('app/customer-simple.css', `
 .s-workspace .food-planner > .p-section-head > button { flex: none; }
 .s-workspace .s-rest-row, .s-workspace .s-bottom-nav a { color: #63705f; }
 .s-workspace .s-activity em { color: #65755e; }
+.s-workspace .s-bottom-nav { gap: 0; letter-spacing: 0; }
+.s-workspace .s-bottom-nav a { letter-spacing: 0; min-width: 0; }
+.s-workspace .s-bottom-nav a > span { white-space: nowrap; letter-spacing: 0; }
 .s-workspace .s-bottom-nav .is-current { color: #234c2f; }
+.s-workspace .s-nutrition-details > summary { display: block; min-height: 36px; padding: 8px 0; border: 0; font-weight: 450; letter-spacing: 0; line-height: 1.35; }
+.s-workspace .s-review > summary { display: block; min-height: 28px; padding: 4px 0; border: 0; font-weight: 450; line-height: 1.4; }
+.s-workspace .meal-card .s-more { margin: -7px -8px -7px 0; padding: 0; }
+.s-workspace .s-nutrition-header strong { font-size: 21px; word-break: normal; overflow-wrap: normal; }
 `);
 let test=fs.readFileSync('scripts/integration.mts','utf8');
 function once(before,after){assert.equal(test.split(before).length,2,'Test anchor changed: '+before.slice(0,100));test=test.replace(before,after);}
-// Existing assertions on database contents, ownership, totals and persistence remain intact.
+// Retain all state assertions. Recorded meals must remain immutable: target an explicitly planned slot.
 test=test.replaceAll('name: "Beregn & tilpas"','name: "Tilpas madplan"');
 test=test.replaceAll('name: "Byt · 3 forslag"','name: "Byt · 3 valg"');
 test=test.replaceAll('name: "Start træning →"','name: "Start træning", exact: true');
 once('assert.ok((await page.locator("body").textContent())?.includes("I dag."));','assert.ok(await page.getByRole("heading", {name:"I dag", exact:true}).isVisible());');
 once('      await page.goto(env.APP_URL + "/app/training");\n      await page\n        .getByRole("button", { name: "Planlæg pause", exact: true })','      await page.goto(env.APP_URL + "/app/training");\n      await page.locator(".s-pause-options > summary").click();\n      await page\n        .getByRole("button", { name: "Planlæg pause", exact: true })');
-once('      await page.getByText("Flere handlinger", { exact: true }).first().click();','      await page.locator(".meal-card .s-more > summary").first().click();');
-once('      await page\n        .getByRole("button", { name: "Fjern", exact: true })','      await page.locator(".meal-card .s-more > summary").first().click();\n      await page\n        .getByRole("button", { name: "Fjern måltid", exact: true })');
+once('      await page.getByText("Flere handlinger", { exact: true }).first().click();','      await page.locator(".meal-card:has(.status.planned) .s-more > summary").first().click();');
+once('      await page\n        .getByRole("button", { name: "Fjern", exact: true })','      await page.locator(".meal-card:has(.status.planned) .s-more > summary").first().click();\n      await page\n        .getByRole("button", { name: "Fjern måltid", exact: true })');
 once('      await page.goto(env.APP_URL + "/app");\n      await page\n        .getByRole("button", { name: "Se og ret registrering" })\n        .click();','      await page.goto(env.APP_URL + "/app/training");\n      await page.locator(".s-activity").filter({hasText:"Gennemført"}).first().click();');
 once('assert.match(card, /Planlagt protein\\s*160\\s*g/);','assert.match(card, /160\\s*g protein\\s*planlagt/);');
 once('assert.match(card, /Minimumsmål: 102 g/);','assert.match(card, /minimumsmål 102 g/);');
@@ -44,5 +54,5 @@ once('          assert.equal(\n            await page.evaluate(\n              (
             await page.evaluate(
               () => document.documentElement.scrollWidth > innerWidth,`);
 fs.writeFileSync('scripts/integration.mts',test);
-fs.writeFileSync(done,'# Simplified experience regression tests\n\nExisting integration tests retain their state, ownership, nutrition, persistence, refund and access checks. UI locators follow the new navigation: completed workouts through the calendar, secondary meal actions through their menu, and pause settings through disclosure. Shared-navigation checks cover every authenticated route and viewport. Overflow failures capture diagnostics, not hidden content. No test account data or credentials are committed.\n');
+fs.writeFileSync(done,'# Simplified experience regression tests\n\nExisting integration tests retain their state, ownership, nutrition, persistence, refund and access checks. Locators target editable planned meals, not already consumed history. Completed workouts are reached through the calendar, secondary actions through their menu, and pause settings through disclosure. Shared-navigation checks cover every authenticated route and viewport. Overflow failures capture diagnostics instead of hiding content. No test account credentials are committed.\n');
 console.log('Updated selectors and retained the full integration suite.');
