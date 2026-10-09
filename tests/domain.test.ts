@@ -88,7 +88,12 @@ test("50 recipes, nutrition sources, vegan eligibility and exclusions", () => {
   const p = ingredients.find((i) => i.id === "banana")!;
   assert.equal(p.per100g.kcal, 89);
   assert.equal(p.per100g.protein, 1.09);
-  for (const cat of ["breakfast","lunch","dinner","snack"] as const) {\n    const vegan = recipes.filter(r => r.category === cat && suitable(r, "vegan", [], 60));\n    assert.ok(vegan.length >= 3, `Missing vegan alternatives for ${cat}: ${vegan.length}`);\n  }\n  assert.ok(recipes.some(r => suitable(r,"pescatarian",[],60) && !suitable(r,"vegetarian",[],60)));\n  const vegetarian = recipes.filter((r) =>
+  for (const cat of ["breakfast", "lunch", "dinner", "snack"] as const) {
+    const vegan = recipes.filter(r => r.category === cat && suitable(r, "vegan", [], 60));
+    assert.ok(vegan.length >= 3, `Missing vegan alternatives for ${cat}: ${vegan.length}`);
+  }
+  assert.ok(recipes.some(r => suitable(r, "pescatarian", [], 60) && !suitable(r, "vegetarian", [], 60)));
+  const vegetarian = recipes.filter((r) =>
     suitable(r, "vegetarian", ["milk"], 60),
   );
   assert.ok(vegetarian.length >= 5);
