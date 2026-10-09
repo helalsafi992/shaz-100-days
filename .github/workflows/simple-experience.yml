@@ -1,33 +1,46 @@
-name: Simple customer experience
+name: SHAZ customer experience validation
 on:
   push:
-    branches: [feat/simple-customer-experience]
+    branches: [feat/simple-customer-experience, feat/integrated-plans, main]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: simple-experience-${{ github.ref }}
+  group: shaz-validation-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Apply guarded source transformations
+      - name: Record the exact tested commit
         run: |
-          if test -f scripts/apply-simple-ui.mjs; then node scripts/apply-simple-ui.mjs; fi
-          if test -f scripts/refine-simple-ui.mjs; then node scripts/refine-simple-ui.mjs; fi
-          npx prettier --write components/Portal.tsx components/CardioPlanner.tsx components/FoodPlanner.tsx components/Account.tsx components/customer/SimpleExperience.tsx lib/experience-summary.ts tests/experience-summary.test.ts scripts/integration.mts app/layout.tsx app/page.tsx app/customer-simple.css
-      - name: Preserve exact transformed source for review
+          mkdir -p test-artifacts
+          git rev-parse HEAD > test-artifacts/tested-commit.txt
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Integration tests with isolated database and browser
+        run: npm run test:integration
+      - name: Fresh test evidence only
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-evidence
+          path: |
+            test-artifacts
+          if-no-files-found: error
+          retention-days: 14
+      - name: Tested source snapshot
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: source-snapshot
@@ -48,34 +61,3 @@ jobs:
             railway.json
             instrumentation.ts
           retention-days: 3
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - name: Integration tests against an isolated database
-        run: npm run test:integration
-      - name: Keep verified source changes on this branch only
-        if: success()
-        run: |
-          if test -f docs/SIMPLE-EXPERIENCE-IMPLEMENTED.md; then
-            git add app components lib tests scripts/integration.mts docs/SIMPLE-EXPERIENCE-IMPLEMENTED.md docs/SIMPLE-EXPERIENCE-TESTS.md public/platform-preview.jpg public/platform-desktop.jpg public/recipe-library.jpg
-            if ! git diff --cached --quiet; then
-              git config user.name 'github-actions[bot]'
-              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-              git commit -m 'Apply verified customer experience source refactor'
-              git push origin HEAD:feat/simple-customer-experience
-            fi
-          fi
-      - name: Test evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-evidence
-          path: |
-            docs/*results*.json
-            docs/*verification*.json
-            test-artifacts
-            public/platform-preview.jpg
-            public/platform-desktop.jpg
-            public/recipe-library.jpg
-          if-no-files-found: ignore
-          retention-days: 7
