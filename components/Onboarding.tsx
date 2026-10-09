@@ -180,7 +180,7 @@ export default function Onboarding({
         {step === 2 && (
           <>
             <h2>Kostpræferencer</h2>
-            {choices("diet", ["all", "vegetarian"])}
+            {choices("diet", ["all", "vegetarian", "vegan", "pescatarian"])}
             <label className="p-check">
               <input
                 type="checkbox"
