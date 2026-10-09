@@ -181,7 +181,7 @@ export default function Onboarding({
         </p>
         {step === 0 && <GoalQuestions value={answers} onChange={setAnswers}
           onProfileGoal={(goal,level)=>setP(x=>({...x,goal,...(level?{level}:{})}))}/>}
-        {step === 1 && (
+        {step === 1 && (<>
           <TrainingSettings
             value={p}
             onChange={(v) => {
@@ -190,7 +190,7 @@ export default function Onboarding({
             }}
           />
           <PreferredExerciseQuestions value={answers} onChange={setAnswers}/>
-        )}
+        </>)}
         {step === 2 && <SafetyQuestions value={answers} onChange={setAnswers}/>}
         {step === 3 && (
           <>
