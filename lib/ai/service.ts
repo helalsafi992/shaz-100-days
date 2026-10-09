@@ -53,7 +53,7 @@ export async function personalize(user:string,input:unknown,expectedProfileVersi
   const calc=estimate(v.profile);if(v.profile.nutrition==='calculated' && (!calc.available || !calc.allowed))throw new HttpError(409,calc.available?calc.reason:calc.explanation);
   if(weekProblems(v.profile).length)throw new HttpError(409,'Træning og cardio passer ikke sikkert sammen med de valgte dage. Ret ugeplanen.');
   const ex=await catalog('exercise') as Exercise[],rs=await catalog('recipe') as Recipe[],blueprint=candidateBlueprint(v,ex,rs);
-  const fingerprint=digest({v,profileVersion:current.version,promptVersion,evidenceVersion,model:process.env.OPENAI_MODEL,slots:blueprint.slots,exerciseVersions:ex.map(x=>[x.id,x.version]),recipeVersions:rs.map(x=>[x.id,x.version]),day:localDate()});
+  const fingerprint=digest({v,profileVersion:current.version,promptVersion,evidenceVersion,model:process.env.OPENAI_MODEL,slots:blueprint.slots,exerciseVersions:ex.map(x=>[x.id,x.version]),recipeVersions:rs.map(x=>[x.id,x.version])});
   await db().query('DELETE FROM shaz_ai_proposals WHERE user_id=$1 AND expires_at<now()',[user]);
   const existing=await db().query('SELECT status,encrypted_result FROM shaz_ai_proposals WHERE user_id=$1 AND fingerprint=$2 AND expires_at>now()',[user,fingerprint]);if(existing.rows[0]?.status==='ready')return {...JSON.parse(unseal(existing.rows[0].encrypted_result)),cached:true};
   const lease=randomUUID();
