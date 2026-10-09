@@ -1,0 +1,76 @@
+name: Simple customer experience
+on:
+  push:
+    branches: [feat/simple-customer-experience]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: simple-experience-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Preserve the exact source snapshot for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-snapshot
+          path: |
+            app
+            components
+            lib
+            scripts
+            tests
+            migrations
+            public
+            docs
+            package.json
+            package-lock.json
+            tsconfig.json
+            next.config.ts
+            postcss.config.mjs
+            railway.json
+            instrumentation.ts
+          retention-days: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Apply the guarded source refactor when present
+        run: |
+          if test -f scripts/apply-simple-ui.mjs; then node scripts/apply-simple-ui.mjs; fi
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Integration tests against an isolated database
+        run: npm run test:integration
+      - name: Keep verified source changes on this branch only
+        if: success()
+        run: |
+          if test -f docs/SIMPLE-EXPERIENCE-IMPLEMENTED.md; then
+            git add app components lib tests docs/SIMPLE-EXPERIENCE-IMPLEMENTED.md
+            if ! git diff --cached --quiet; then
+              git config user.name 'github-actions[bot]'
+              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+              git commit -m 'Apply verified customer experience source refactor'
+              git push origin HEAD:feat/simple-customer-experience
+            fi
+          fi
+      - name: Test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-evidence
+          path: |
+            docs/*results*.json
+            docs/*verification*.json
+            test-results
+            screenshots
+          if-no-files-found: ignore
+          retention-days: 7
