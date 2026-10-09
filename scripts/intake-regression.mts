@@ -162,5 +162,59 @@ try{
   assert.deepEqual((await db().query('SELECT data FROM shaz_meal_days WHERE user_id=$1 AND date=$2',[fresh.id,meal.date])).rows[0].data,meal.data);
   assert.deepEqual(errors,[]);await context.close();
  });
+ await check('Cardio editor exposes 0–7 days and accepts 90 minutes without forced clamp on iPhone-size screen',async()=>{
+  const context=await browser!.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  try{
+   await context.addCookies(active.cookie.split('; ').map(c=>{const i=c.indexOf('=');return{name:c.slice(0,i),value:c.slice(i+1),url:env.APP_URL};}));
+   const page=await context.newPage();
+   await page.goto(env.APP_URL+'/app/training',{waitUntil:'networkidle'});
+   await page.getByRole('button',{name:'Tilpas cardio',exact:true}).click();
+   const dialog=page.getByRole('dialog',{name:'Tilpas cardio'});
+   const dayChoices=dialog.getByLabel('Cardiopas om ugen');
+   assert.deepEqual(await dayChoices.locator('option').allTextContents(),['Ingen ekstra cardio','1','2','3','4','5','6','7']);
+   await dayChoices.selectOption('7');
+   const minutes=dialog.getByLabel('Ønsket varighed (min.)');
+   await minutes.fill('');
+   assert.equal(await minutes.inputValue(),'','The duration must be clearable without an unwanted 0');
+   await minutes.fill('90');
+   assert.equal(await minutes.inputValue(),'90');
+   assert.equal(await minutes.evaluate((input:HTMLInputElement)=>input.checkValidity()),true,'Ninety minutes must be allowed');
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   await page.screenshot({path:'test-artifacts/cardio-unrestricted-390.png',fullPage:true});
+  }finally{await context.close();}
+ });
+ await check('A 90-minute cardio session can move to a strength day even when every day has training',async()=>{
+  const {profileSchema,addDays}=await import('../lib/profile');
+  const {syncCardio,cardioRows,editCardio}=await import('../lib/cardio-store');
+  const old=await profile(active.id);
+  const cfg=profileSchema.parse({...old.data,startDate:old.start_date,cardio:{
+    days:6,weekdays:[0,2,3,4,5,6],minutes:90,forms:['cycle'],equipment:['bike'],
+    level:'beginner',intensity:'moderate'
+  }});
+  await syncCardio(active.id,cfg,today);
+  const futureMonday=(await db().query(
+    "SELECT scheduled_date::text AS date FROM shaz_days WHERE user_id=$1 AND plan->>'kind'='workout' AND scheduled_date>=$2 ORDER BY scheduled_date",
+    [active.id,addDays(today,7)]
+  )).rows.find((x:{date:string})=>new Date(x.date+'T12:00:00Z').getUTCDay()===1)?.date;
+  assert.ok(futureMonday,'Expected a future Monday strength session');
+  const original=await cardioRows(active.id);
+  const source=original.find(r=>r.scheduled_date>futureMonday && new Date(r.scheduled_date+'T12:00:00Z').getUTCDay()===3 && r.status==='planned');
+  assert.ok(source,'Expected a future Wednesday cardio session');
+  assert.equal(source.plan.selected.minutes,90);
+  const originalDates=new Set(original.filter(x=>x.status==='planned').map(x=>x.scheduled_date));
+  assert.ok(!originalDates.has(futureMonday),'Destination must have strength but no competing cardio');
+  await editCardio(active.id,{id:source.id,action:'move',date:futureMonday});
+  const moved=(await cardioRows(active.id)).find(r=>r.id===source.id);
+  assert.equal(moved?.scheduled_date,futureMonday);
+  assert.equal(moved?.plan.selected.minutes,90);
+  // A real recorded row remains, and the weekly calendar can have seven active dates.
+  const planDays=(await db().query(
+    "SELECT scheduled_date::text AS date FROM shaz_days WHERE user_id=$1 AND plan->>'kind'='workout' AND scheduled_date BETWEEN $2 AND $3",
+    [active.id,futureMonday,addDays(futureMonday,6)]
+  )).rows.map((r:{date:string})=>r.date);
+  const cardioDates=(await cardioRows(active.id)).filter(r=>r.status==='planned' && r.scheduled_date>=futureMonday && r.scheduled_date<=addDays(futureMonday,6)).map(r=>r.scheduled_date);
+  const activeDates=new Set([...planDays,...cardioDates]);
+  assert.equal(activeDates.size,7,'No compulsory rest-day cap may silently reject or reschedule chosen dates');
+ });
  console.log('ALL CLEAR ONBOARDING CHECKS PASSED');
 }finally{await mkdir('test-artifacts',{recursive:true});await writeFile('test-artifacts/clear-onboarding-results.json',JSON.stringify({commit:process.env.GITHUB_SHA||'local',results},null,2));await browser?.close();server?.kill('SIGTERM');await db().end();await socket.stop();await pg.close();}
