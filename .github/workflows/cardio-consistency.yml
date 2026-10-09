@@ -1,0 +1,42 @@
+name: SHAZ cardio and coach flow QA
+on:
+  push:
+    branches: [fix/cardio-consistency-coach-flow]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cardio-consistency-review
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Pin test commit
+        run: |
+          mkdir -p test-artifacts
+          git rev-parse HEAD > test-artifacts/tested-commit.txt
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Existing isolated database and browser tests
+        run: npm run test:integration
+      - name: Cardio overlap, coach approval, customer swap and browser UI
+        run: node --import tsx scripts/intake-regression.mts
+      - name: Test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardio-coach-evidence
+          path: test-artifacts
+          if-no-files-found: ignore
+          retention-days: 10
