@@ -32,6 +32,12 @@ for n in (1, 2, 3):
 # Check every input and output before writing any file.
 for path, updated in pending:
     path.write_bytes(updated)
+# Moderate cardio is not automatically a hard training day. Its amount is a user choice.
+p = root / 'lib/profile.ts'
+s = p.read_text()
+line = '    ...(p.cardio?.intensity === "moderate" ? p.cardio.weekdays : []),\n'
+assert s.count(line) == 1, 'Hard-day cardio anchor changed'
+p.write_text(s.replace(line, ''))
 marker.parent.mkdir(exist_ok=True)
 marker.write_text('# Coach review source applied\n\nExact source edits materialized. Validation is recorded separately in the workflow run; this file alone does not certify a passing test or deployment.\n')
 print('Applied', len(pending), 'guarded source updates.')
