@@ -1,4 +1,6 @@
 "use client";
+import { Icon, MoreActions } from "./customer/SimpleExperience";
+import { numberLabel } from "@/lib/experience-summary";
 import { portionMeasure } from "@/lib/portion-policy";
 import { useEffect, useState, type ReactNode } from "react";
 import { ingredients, nutrients, suitable, type Recipe } from "@/lib/recipes";
@@ -58,14 +60,11 @@ export function FoodSummary({ today }: { today: string }) {
   const day = state?.days.find((d) => d.date === today)?.data,
     q = day ? mealQuality(day) : null;
   return (
-    <section className="p-card">
-      <div className="p-section-head">
-        <div>
-          <span className="p-eyebrow">DAGENS MAD</span>
-          <h2>Valgt til i dag.</h2>
-        </div>
-        <a className="p-secondary" href="/app/food">
-          Se madplan →
+    <section className="s-food-summary">
+      <div className="s-section-header">
+        <h2>Dagens mad</h2>
+        <a href="/app/food" className="s-inline-link">
+          Åbn madplan <Icon name="arrow" size={16} />
         </a>
       </div>
       {error ? (
@@ -73,39 +72,48 @@ export function FoodSummary({ today }: { today: string }) {
           {error}
         </p>
       ) : !day ? (
-        <p>Åbn madplanen og tilpas måltider og portioner.</p>
+        <p className="s-food-meta" role="status">
+          Henter din madplan…
+        </p>
       ) : (
         <>
-          <div className="nutrition-strip">
-            <span>
-              Mål <b>{day.target ?? "—"} kcal</b>
-            </span>
-            <span>
-              Planlagt <b>{Math.round(q!.total.kcal)} kcal</b>
-            </span>
-            <span>
-              Protein <b>{Math.round(q!.total.protein)} g</b>
-            </span>
+          <p className="s-food-meta">
+            {day.slots.length} måltider · {numberLabel(q!.total.kcal)} kcal
+            planlagt{day.target ? " · mål " + numberLabel(day.target) : ""}
+          </p>
+          <div className="s-food-list">
+            {day.slots.map((s, i) => (
+              <a href="/app/food" key={s.id}>
+                <span className="s-meal-no">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span>
+                  <strong>
+                    {s.selected?.recipe.name || "Vælg en opskrift"}
+                  </strong>
+                  <small>
+                    {s.time} · {s.name}
+                    {s.status === "eaten"
+                      ? " · Spist"
+                      : s.status === "skipped"
+                        ? " · Sprunget over"
+                        : ""}
+                  </small>
+                </span>
+                {s.status === "eaten" ? (
+                  <Icon name="check" size={16} />
+                ) : (
+                  <Icon name="arrow" size={14} />
+                )}
+              </a>
+            ))}
           </div>
-          {day.slots.map((s) => (
-            <div className="p-list-row" key={s.id}>
-              <span>
-                {s.time} · {s.name}
-                <small>
-                  {s.status === "eaten"
-                    ? "Registreret som spist"
-                    : s.status === "skipped"
-                      ? "Sprunget over"
-                      : "Planlagt"}
-                </small>
-              </span>
-              <b>{s.selected?.recipe.name || "Vælg en opskrift"}</b>
-            </div>
-          ))}
-          <p className="p-note">
-            Faktisk registreret: {Math.round(q!.actual.kcal)} kcal ·{" "}
-            {Math.round(q!.actual.protein)} g protein. Planlagt er ikke det
-            samme som spist.
+          <p className="s-food-progress">
+            <strong>
+              {day.slots.filter((s) => s.status === "eaten").length} af{" "}
+              {day.slots.length}
+            </strong>{" "}
+            registreret som spist · {numberLabel(q!.actual.kcal)} kcal
           </p>
         </>
       )}
@@ -175,6 +183,7 @@ export default function FoodPlanner({
     const d = await r.json();
     if (!r.ok) throw Error(d.error);
     setState(d);
+    setError("");
     if (start < d.profile.start_date) setDate(d.profile.start_date);
     return d as State;
   }
@@ -214,8 +223,16 @@ export default function FoodPlanner({
       ...extra,
     });
     if (r) {
-      await load();
-      setModal(null);
+      try {
+        await load();
+        setModal(null);
+      } catch (e) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Handlingen er gemt, men overblikket kunne ikke opdateres. Genindlæs siden.",
+        );
+      }
     }
   }
   function openSettings() {
@@ -249,10 +266,10 @@ export default function FoodPlanner({
       <div className="p-section-head">
         <div>
           <span className="p-eyebrow">MAD TIL DIN HVERDAG</span>
-          <h1>Din madplan.</h1>
+          <h1>Mad</h1>
         </div>
         <button className="p-secondary" onClick={openSettings} disabled={!p}>
-          Beregn & tilpas
+          Tilpas madplan
         </button>
       </div>
       <div className="food-tabs" role="tablist" aria-label="Mad">
@@ -265,6 +282,28 @@ export default function FoodPlanner({
             key={id}
             role="tab"
             aria-selected={tab === id}
+            tabIndex={tab === id ? 0 : -1}
+            aria-controls="food-tab-panel"
+            onKeyDown={(event) => {
+              const ids = ["plan", "recipes", "shopping"],
+                i = ids.indexOf(id);
+              const next =
+                event.key === "ArrowRight"
+                  ? (i + 1) % 3
+                  : event.key === "ArrowLeft"
+                    ? (i + 2) % 3
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? 2
+                        : -1;
+              if (next < 0) return;
+              event.preventDefault();
+              setTab(ids[next]);
+              event.currentTarget.parentElement
+                ?.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+                [next]?.focus();
+            }}
             onClick={() => setTab(id)}
           >
             {label}
@@ -276,389 +315,414 @@ export default function FoodPlanner({
           {error}
         </p>
       )}
-      {tab === "recipes" ? (
-        library
-      ) : (
-        <>
-          <div className="day-selector">
-            <button
-              className="p-secondary"
-              aria-label="Forrige dag"
-              onClick={() => setDate(addDays(date, -1))}
-              disabled={!state || date <= state.profile.start_date}
-            >
-              ←
-            </button>
-            <label>
-              {tab === "shopping" ? "Indkøb fra" : "Vælg dag"}
-              <input
-                type="date"
-                value={date}
-                min={state?.profile.start_date}
-                max={state ? addDays(state.profile.start_date, 99) : undefined}
-                onChange={(ev) => ev.target.value && setDate(ev.target.value)}
-              />
-            </label>
-            <button
-              className="p-secondary"
-              aria-label="Næste dag"
-              onClick={() => setDate(addDays(date, 1))}
-              disabled={!state || date >= addDays(state.profile.start_date, 99)}
-            >
-              →
-            </button>
-          </div>
-          {!state ? (
-            <p className="p-card">Henter dine gemte valg…</p>
-          ) : tab === "shopping" ? (
-            <section className="p-card">
-              <h2>Kun det, du har valgt.</h2>
+      <div
+        id="food-tab-panel"
+        role="tabpanel"
+        aria-label={
+          tab === "plan"
+            ? "Min madplan"
+            : tab === "recipes"
+              ? "Opskrifter"
+              : "Indkøb"
+        }
+      >
+        {tab === "recipes" ? (
+          library
+        ) : (
+          <>
+            <div className="day-selector">
+              <button
+                className="p-secondary"
+                aria-label="Forrige dag"
+                onClick={() => setDate(addDays(date, -1))}
+                disabled={!state || date <= state.profile.start_date}
+              >
+                ←
+              </button>
               <label>
-                Antal dage i indkøbet
-                <select
-                  value={shoppingDays}
-                  onChange={(e) => setShoppingDays(Number(e.target.value))}
-                >
-                  {Array.from({ length: 14 }, (_, i) => (
-                    <option value={i + 1} key={i + 1}>
-                      {i + 1} {i ? "dage" : "dag"}
-                    </option>
-                  ))}
-                </select>
+                {tab === "shopping" ? "Indkøb fra" : "Vælg dag"}
+                <input
+                  type="date"
+                  value={date}
+                  min={state?.profile.start_date}
+                  max={
+                    state ? addDays(state.profile.start_date, 99) : undefined
+                  }
+                  onChange={(ev) => ev.target.value && setDate(ev.target.value)}
+                />
               </label>
-              <p>
-                Fra {pretty(date)} og de næste {state.days.length} dage. A-, B-
-                og C-alternativer tæller ikke med.
-              </p>
-              {state.days.some((d) =>
-                d.data.slots.some((s) => s.batch && s.batch.cookDate < date),
-              ) && (
-                <p className="p-notice">
-                  Intervallet indeholder rester fra en tidligere madlavningsdag.
-                  Deres ingredienser står på den dag og bliver ikke købt igen
-                  her.
+              <button
+                className="p-secondary"
+                aria-label="Næste dag"
+                onClick={() => setDate(addDays(date, 1))}
+                disabled={
+                  !state || date >= addDays(state.profile.start_date, 99)
+                }
+              >
+                →
+              </button>
+            </div>
+            {!state ? (
+              <p className="p-card">Henter dine gemte valg…</p>
+            ) : tab === "shopping" ? (
+              <section className="p-card">
+                <h2>Kun det, du har valgt.</h2>
+                <label>
+                  Antal dage i indkøbet
+                  <select
+                    value={shoppingDays}
+                    onChange={(e) => setShoppingDays(Number(e.target.value))}
+                  >
+                    {Array.from({ length: 14 }, (_, i) => (
+                      <option value={i + 1} key={i + 1}>
+                        {i + 1} {i ? "dage" : "dag"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p>
+                  Fra {pretty(date)} og de næste {state.days.length} dage. A-,
+                  B- og C-alternativer tæller ikke med.
                 </p>
-              )}
-              {shoppingGroups(state.days.map((d) => d.data)).map((group) => (
-                <section key={group.name} aria-label={group.name}>
-                  <h3>{group.name}</h3>
-                  <div className="shopping-grid">
-                    {group.items.map((i) => (
-                      <label className="shopping-item" key={i.id}>
-                        <input
-                          type="checkbox"
-                          disabled={Object.hasOwn(
-                            pendingShopping,
-                            `${date}:${shoppingDays}:${i.id}`,
-                          )}
-                          aria-busy={Object.hasOwn(
-                            pendingShopping,
-                            `${date}:${shoppingDays}:${i.id}`,
-                          )}
-                          checked={
-                            pendingShopping[
-                              `${date}:${shoppingDays}:${i.id}`
-                            ] ??
-                            shopping.some(
+                {state.days.some((d) =>
+                  d.data.slots.some((s) => s.batch && s.batch.cookDate < date),
+                ) && (
+                  <p className="p-notice">
+                    Intervallet indeholder rester fra en tidligere
+                    madlavningsdag. Deres ingredienser står på den dag og bliver
+                    ikke købt igen her.
+                  </p>
+                )}
+                {shoppingGroups(state.days.map((d) => d.data)).map((group) => (
+                  <section key={group.name} aria-label={group.name}>
+                    <h3>{group.name}</h3>
+                    <div className="shopping-grid">
+                      {group.items.map((i) => (
+                        <label className="shopping-item" key={i.id}>
+                          <input
+                            type="checkbox"
+                            disabled={Object.hasOwn(
+                              pendingShopping,
+                              `${date}:${shoppingDays}:${i.id}`,
+                            )}
+                            aria-busy={Object.hasOwn(
+                              pendingShopping,
+                              `${date}:${shoppingDays}:${i.id}`,
+                            )}
+                            checked={
+                              pendingShopping[
+                                `${date}:${shoppingDays}:${i.id}`
+                              ] ??
+                              shopping.some(
+                                (s) =>
+                                  s.week === date &&
+                                  s.ingredient_id === i.id &&
+                                  s.checked &&
+                                  Number(s.checked_grams || 0) >= i.grams,
+                              )
+                            }
+                            onChange={async (ev) => {
+                              const key = `${date}:${shoppingDays}:${i.id}`,
+                                on = ev.target.checked;
+                              setPendingShopping((s) => ({ ...s, [key]: on }));
+                              try {
+                                await action("shopping", {
+                                  week: date,
+                                  id: i.id,
+                                  on,
+                                  count: shoppingDays,
+                                });
+                              } finally {
+                                setPendingShopping((s) => {
+                                  const next = { ...s };
+                                  delete next[key];
+                                  return next;
+                                });
+                              }
+                            }}
+                          />
+                          <span>
+                            {i.name}
+                            <small>{i.basis}</small>
+                            {shopping.some(
                               (s) =>
                                 s.week === date &&
                                 s.ingredient_id === i.id &&
                                 s.checked &&
-                                Number(s.checked_grams || 0) >= i.grams,
-                            )
-                          }
-                          onChange={async (ev) => {
-                            const key = `${date}:${shoppingDays}:${i.id}`,
-                              on = ev.target.checked;
-                            setPendingShopping((s) => ({ ...s, [key]: on }));
-                            try {
-                              await action("shopping", {
-                                week: date,
-                                id: i.id,
-                                on,
-                                count: shoppingDays,
-                              });
-                            } finally {
-                              setPendingShopping((s) => {
-                                const next = { ...s };
-                                delete next[key];
-                                return next;
-                              });
-                            }
-                          }}
-                        />
-                        <span>
-                          {i.name}
-                          <small>{i.basis}</small>
-                          {shopping.some(
-                            (s) =>
-                              s.week === date &&
-                              s.ingredient_id === i.id &&
-                              s.checked &&
-                              Number(s.checked_grams || 0) < i.grams,
-                          ) && (
-                            <small>Øget behov — kontrollér mængden igen</small>
-                          )}
-                        </span>
-                        <b>{displayMass(i.grams)}</b>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </section>
-          ) : day && quality ? (
-            <>
-              <section className="p-card daily-nutrition">
-                <div className="nutrition-strip">
-                  <span>
-                    Dagligt mål
-                    <b>
-                      {day.target ?? "—"}
-                      <small> kcal</small>
-                    </b>
-                  </span>
-                  <span>
-                    Din valgte plan
-                    <b>
-                      {Math.round(quality.total.kcal)}
-                      <small> kcal</small>
-                    </b>
-                  </span>
-                  <span>
-                    Planlagt protein
-                    <b>
-                      {Math.round(quality.total.protein)}
-                      <small>
-                        {" "}
-                        g
-                        {day.proteinTarget
-                          ? " · Minimumsmål: " + day.proteinTarget + " g"
-                          : ""}
-                      </small>
-                    </b>
-                  </span>
-                </div>
-                <p className="p-note">
-                  Registreret som spist: {Math.round(quality.actual.kcal)} kcal
-                  · {Math.round(quality.actual.protein)} g protein.
-                </p>
-                {quality.issues.length > 0 ? (
-                  <details className="plan-issues" open>
-                    <summary>Planen kræver din opmærksomhed</summary>
-                    {quality.issues.map((x) => (
-                      <p key={x}>{x}</p>
-                    ))}
-                  </details>
-                ) : (
-                  <p className="plan-ok">
-                    ✓ De valgte portioner ligger inden for 5 % af målet og
-                    testpolitikkens protein-, fedt- og fibergrænser.
-                  </p>
-                )}
-                <p className="p-note">
-                  Beregnet fra råvarerne. Dette kontrollerer ikke alle vitaminer
-                  og mineraler. Testreglerne afventer faglig godkendelse.
-                </p>
-              </section>
-              <div className="meal-cards">
-                {day.slots.map((s) => (
-                  <section className="p-card meal-card" key={s.id}>
-                    <div className="p-section-head">
-                      <span className="p-eyebrow">
-                        {s.time} · {s.name}
-                      </span>
-                      <span className={"status " + s.status}>
-                        {s.status === "eaten"
-                          ? "✓ Spist"
-                          : s.status === "skipped"
-                            ? "Sprunget over"
-                            : "Planlagt"}
-                      </span>
-                    </div>
-                    {s.selected ? (
-                      <>
-                        <img
-                          className="meal-image"
-                          src={
-                            "/api/recipe-illustration/" + s.selected.recipe.id
-                          }
-                          alt={
-                            "Ingrediensillustration: " + s.selected.recipe.name
-                          }
-                        />
-                        <span className="image-caption">
-                          Ingrediensillustration
-                        </span>
-                        <h2>{s.selected.recipe.name}</h2>
-                        <div className="p-pills">
-                          <span>{s.selected.recipe.minutes} min.</span>
-                          <span>{s.selected.servings} portion</span>
-                          <span>{Math.round(s.selected.totals.kcal)} kcal</span>
-                          <span>
-                            {Math.round(s.selected.totals.protein)} g protein
+                                Number(s.checked_grams || 0) < i.grams,
+                            ) && (
+                              <small>
+                                Øget behov — kontrollér mængden igen
+                              </small>
+                            )}
                           </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="empty-meal">
-                        <h2>Plads til noget andet.</h2>
-                        <p>Målet er stadig {day.target ?? "uændret"} kcal.</p>
-                        <button
-                          className="p-button"
-                          onClick={() => {
-                            setModal({ slot: s, mode: "swap" });
-                            setQ("");
-                          }}
-                        >
-                          Vælg en anden opskrift
-                        </button>
-                        {s.previous && (
+                          <b>{displayMass(i.grams)}</b>
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </section>
+            ) : day && quality ? (
+              <>
+                <section
+                  className="p-card daily-nutrition"
+                  aria-label="Dagens energi og protein"
+                >
+                  <div className="s-nutrition-header">
+                    <div>
+                      <span>Planlagt i dag</span>
+                      <strong>
+                        {numberLabel(quality.total.kcal)} <small>kcal</small>
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Dit daglige mål</span>
+                      <strong>
+                        {day.target ? numberLabel(day.target) : "Uden mål"}{" "}
+                        <small>{day.target ? "kcal" : ""}</small>
+                      </strong>
+                    </div>
+                  </div>
+                  <p className="s-nutrition-secondary">
+                    <b>{numberLabel(quality.total.protein)} g protein</b>{" "}
+                    planlagt
+                    {day.proteinTarget
+                      ? " · minimumsmål " + day.proteinTarget + " g"
+                      : ""}
+                  </p>
+                  <p className="s-nutrition-secondary">
+                    Registreret som spist:{" "}
+                    <b>{numberLabel(quality.actual.kcal)} kcal</b> ·{" "}
+                    {numberLabel(quality.actual.protein)} g protein
+                  </p>
+                  {quality.issues.length > 0 && (
+                    <details className="plan-issues" open>
+                      <summary>Planen kræver din opmærksomhed</summary>
+                      {quality.issues.map((x) => (
+                        <p key={x}>{x}</p>
+                      ))}
+                    </details>
+                  )}
+                  <details className="s-nutrition-details">
+                    <summary>Om beregning og mål</summary>
+                    <p>
+                      Energi og næringsindhold er beregnede estimater fra
+                      råvarerne. Planlagt er ikke det samme som spist. Komplette
+                      automatiske planer sigter efter højst 5 % afvigelse fra
+                      målet.
+                    </p>
+                    <p>
+                      Proteinvisningen viser den valgte plan og et separat
+                      minimumsmål – ikke et maksimum. Beregningen kontrollerer
+                      ikke alle vitaminer og mineraler. Faglig godkendelse af
+                      testreglerne afventer.
+                    </p>
+                  </details>
+                </section>
+                <div className="meal-cards">
+                  {day.slots.map((s) => (
+                    <section className="p-card meal-card" key={s.id}>
+                      <div className="s-meal-top">
+                        <span className="p-eyebrow">
+                          {s.time} · {s.name}
+                        </span>
+                        <span className={"status " + s.status}>
+                          {s.status === "eaten"
+                            ? "Spist"
+                            : s.status === "skipped"
+                              ? "Sprunget over"
+                              : "Planlagt"}
+                        </span>
+                        <MoreActions label={"Flere muligheder for " + s.name}>
+                          {s.status === "planned" && !s.batch && s.selected && (
+                            <>
+                              <button
+                                disabled={busy}
+                                onClick={() => {
+                                  setAmount(s.selected!.servings);
+                                  setModal({ slot: s, mode: "portion" });
+                                }}
+                              >
+                                Tilpas portion
+                              </button>
+                              <button
+                                disabled={busy}
+                                onClick={() => meal(s, "remove")}
+                              >
+                                Fjern måltid
+                              </button>
+                              {date >= today &&
+                                date <
+                                  addDays(state!.profile.start_date, 99) && (
+                                  <button
+                                    disabled={busy}
+                                    onClick={() => setBatchSlot(s)}
+                                  >
+                                    Lav også til i morgen
+                                  </button>
+                                )}
+                            </>
+                          )}
+                          {date <= today &&
+                            (s.status === "planned" ? (
+                              <button
+                                disabled={busy}
+                                onClick={() => meal(s, "skipped")}
+                              >
+                                Jeg sprang måltidet over
+                              </button>
+                            ) : (
+                              <button
+                                disabled={busy}
+                                onClick={() =>
+                                  window.confirm(
+                                    "Ophæv registreringen, så du kan rette måltidet?",
+                                  ) && meal(s, "reopen")
+                                }
+                              >
+                                Ret registrering
+                              </button>
+                            ))}
+                          {s.status === "planned" && s.batch && (
+                            <span className="s-menu-note">
+                              Fælles madlavning ændres under sammenkædningen
+                              nedenfor.
+                            </span>
+                          )}
+                        </MoreActions>
+                      </div>
+                      {s.selected ? (
+                        <>
+                          <div className="s-meal-title">
+                            <span className="s-meal-symbol">
+                              <Icon name="food" />
+                            </span>
+                            <div>
+                              <h2>{s.selected.recipe.name}</h2>
+                              <p className="s-meal-facts">
+                                {numberLabel(s.selected.totals.kcal)} kcal ·{" "}
+                                {numberLabel(s.selected.totals.protein)} g
+                                protein · {s.selected.recipe.minutes} min.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="s-meal-actions">
+                            <button onClick={() => setRecipe(s.selected)}>
+                              Se opskrift
+                            </button>
+                            {s.status === "planned" && !s.batch && (
+                              <button
+                                disabled={busy}
+                                onClick={() => {
+                                  setModal({ slot: s, mode: "swap" });
+                                  setQ("");
+                                }}
+                              >
+                                Byt · {s.options.length} valg
+                              </button>
+                            )}
+                            {date <= today && s.status === "planned" && (
+                              <button
+                                className="s-eaten"
+                                disabled={busy}
+                                onClick={() => meal(s, "eaten")}
+                              >
+                                <Icon name="check" size={14} />
+                                Spist
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="empty-meal">
+                          <h2>Vælg et nyt måltid</h2>
+                          <p>
+                            Kaloriemålet er uændret. Vælg blandt dine egnede
+                            opskrifter.
+                          </p>
                           <button
                             className="p-secondary"
-                            onClick={() => meal(s, "undo")}
-                          >
-                            Fortryd fjernelse
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <div className="meal-actions">
-                      {s.selected && (
-                        <button onClick={() => setRecipe(s.selected)}>
-                          Se opskrift
-                        </button>
-                      )}
-                      {s.status === "planned" && !s.batch && (
-                        <>
-                          <button
-                            disabled={busy}
                             onClick={() => {
                               setModal({ slot: s, mode: "swap" });
                               setQ("");
                             }}
                           >
-                            Byt · {s.options.length} forslag
+                            Vælg en anden opskrift
                           </button>
-                          {s.selected && (
-                            <details className="meal-more">
-                              <summary>Flere handlinger</summary>
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setAmount(s.selected!.servings);
-                                    setModal({ slot: s, mode: "portion" });
-                                  }}
-                                >
-                                  Tilpas portion
-                                </button>
-                                <button onClick={() => meal(s, "remove")}>
-                                  Fjern
-                                </button>
-                                {date >= today &&
-                                  date <
-                                    addDays(state.profile.start_date, 99) && (
-                                    <button
-                                      disabled={busy}
-                                      onClick={() => setBatchSlot(s)}
-                                    >
-                                      Lav også til i morgen
-                                    </button>
-                                  )}
-                              </>
+                          {s.previous && (
+                            <button
+                              className="s-text-action"
+                              disabled={busy}
+                              onClick={() => meal(s, "undo")}
+                            >
+                              Fortryd fjernelse
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {s.batch && (
+                        <div className="p-notice">
+                          <b>
+                            {s.batch.cookDate === date &&
+                            s.batch.cookSlot === s.id
+                              ? "Fælles madlavning"
+                              : "Rester fra " + pretty(s.batch.cookDate)}
+                          </b>
+                          <p>
+                            Din energi ovenfor gælder kun din portion. Hele
+                            madlavningens ingredienser står i indkøbet på{" "}
+                            {pretty(s.batch.cookDate)}.
+                          </p>
+                          {s.batch.cookDate === date && (
+                            <details>
+                              <summary>Mængder til hele madlavningen</summary>
+                              <ul>
+                                {s.batch.ingredients.map((i) => (
+                                  <li key={i.id}>
+                                    {
+                                      ingredients.find((v) => v.id === i.id)
+                                        ?.name
+                                    }
+                                    : {i.grams} g
+                                  </li>
+                                ))}
+                              </ul>
                             </details>
                           )}
-                        </>
-                      )}
-                    </div>
-                    {s.batch && (
-                      <div className="p-notice">
-                        <b>
-                          {s.batch.cookDate === date &&
-                          s.batch.cookSlot === s.id
-                            ? "Fælles madlavning"
-                            : "Rester fra " + pretty(s.batch.cookDate)}
-                        </b>
-                        <p>
-                          Din energi ovenfor gælder kun din portion. Hele
-                          madlavningens ingredienser står i indkøbet på{" "}
-                          {pretty(s.batch.cookDate)}.
-                        </p>
-                        {s.batch.cookDate === date && (
-                          <details>
-                            <summary>Mængder til hele madlavningen</summary>
-                            <ul>
-                              {s.batch.ingredients.map((i) => (
-                                <li key={i.id}>
-                                  {ingredients.find((v) => v.id === i.id)?.name}
-                                  : {i.grams} g
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-                        {s.status === "planned" && (
-                          <button
-                            className="p-secondary"
-                            disabled={busy}
-                            onClick={async () => {
-                              if (
-                                !window.confirm(
-                                  "Opløs fælles madlavning? Er alt stadig planlagt, beholdes retterne som separate tilberedninger. Er noget allerede registreret eller historisk, bevares det, mens fremtidige rester bliver til tomme måltidspladser, som du kan erstatte. Kaloriemålet ændres ikke.",
-                                )
-                              )
-                                return;
-                              const r = await request("batch-unlink", {
-                                id: s.batch!.id,
-                              });
-                              if (r) await load();
-                            }}
-                          >
-                            Opløs sammenkædning
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {s.issue && <p className="p-notice">{s.issue}</p>}
-                    {date <= today && (
-                      <div className="meal-actions">
-                        {s.status === "planned" ? (
-                          <>
+                          {s.status === "planned" && (
                             <button
-                              disabled={busy || !s.selected}
-                              onClick={() => meal(s, "eaten")}
-                            >
-                              Registrér som spist ✓
-                            </button>
-                            <button
+                              className="p-secondary"
                               disabled={busy}
-                              onClick={() => meal(s, "skipped")}
+                              onClick={async () => {
+                                if (
+                                  !window.confirm(
+                                    "Opløs fælles madlavning? Er alt stadig planlagt, beholdes retterne som separate tilberedninger. Er noget allerede registreret eller historisk, bevares det, mens fremtidige rester bliver til tomme måltidspladser, som du kan erstatte. Kaloriemålet ændres ikke.",
+                                  )
+                                )
+                                  return;
+                                const r = await request("batch-unlink", {
+                                  id: s.batch!.id,
+                                });
+                                if (r) await load();
+                              }}
                             >
-                              Jeg sprang måltidet over
+                              Opløs sammenkædning
                             </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              window.confirm(
-                                "Ophæv registreringen, så du kan rette måltidet?",
-                              ) && meal(s, "reopen")
-                            }
-                          >
-                            Ret registrering
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </section>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p>Vælg en dag inden for dit forløb.</p>
-          )}
-        </>
-      )}
+                          )}
+                        </div>
+                      )}
+                      {s.issue && <p className="p-notice">{s.issue}</p>}
+                    </section>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p>Vælg en dag inden for dit forløb.</p>
+            )}
+          </>
+        )}
+      </div>
       {batchSlot && (
         <BatchMeal
           date={date}

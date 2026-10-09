@@ -1976,6 +1976,37 @@ try {
               ),
               "Authenticated UI gate shown: " + route,
             );
+          if (
+            await page.evaluate(
+              () => document.documentElement.scrollWidth > innerWidth,
+            )
+          ) {
+            console.log(
+              "OVERFLOW",
+              route,
+              width,
+              await page.evaluate(() =>
+                [...document.querySelectorAll("body *")]
+                  .filter((e) => {
+                    const r = e.getBoundingClientRect();
+                    return (
+                      r.width > 0 && (r.right > innerWidth + 1 || r.left < -1)
+                    );
+                  })
+                  .map((e) => ({
+                    tag: e.tagName,
+                    class: e.className,
+                    width: e.getBoundingClientRect().width,
+                    right: e.getBoundingClientRect().right,
+                  }))
+                  .slice(0, 30),
+              ),
+            );
+            await page.screenshot({
+              path: "test-artifacts/overflow-" + width + ".png",
+              fullPage: true,
+            });
+          }
           assert.equal(
             await page.evaluate(
               () => document.documentElement.scrollWidth > innerWidth,
@@ -1983,6 +2014,14 @@ try {
             false,
             `${route} overflows at ${width}`,
           );
+          if (route.startsWith("/app")) {
+            const nav = page.getByRole("navigation", {
+              name: width <= 760 ? "Mobilnavigation" : "Hovednavigation",
+              exact: true,
+            });
+            assert.ok(await nav.isVisible(), "Shared navigation: " + route);
+            assert.equal(await nav.getByRole("link").count(), 4);
+          }
           if (route === "/app" && width === 390)
             await page.screenshot({
               path: "public/platform-preview.jpg",
@@ -2043,6 +2082,7 @@ try {
       await page.getByRole("button", { name: "Log ind", exact: true }).click();
       await page.waitForURL("**/app");
       await page.goto(env.APP_URL + "/app/training");
+      await page.locator(".s-pause-options > summary").click();
       await page
         .getByRole("button", { name: "Planlæg pause", exact: true })
         .click();
@@ -2161,7 +2201,11 @@ try {
       await page.getByRole("button", { name: "Bekræft og log ind" }).click();
       await page.waitForURL("**/app");
       await page.reload();
-      assert.ok((await page.locator("body").textContent())?.includes("I dag."));
+      assert.ok(
+        await page
+          .getByRole("heading", { name: "I dag", exact: true })
+          .isVisible(),
+      );
       await page.goto(env.APP_URL + "/app/profile");
       await page.getByRole("button", { name: "Log ud", exact: true }).click();
       await page.waitForURL("**/login");
@@ -2211,7 +2255,7 @@ try {
         (d: any) => d.date === today,
       ).data.target;
       assert.ok(preservedTarget > 0);
-      await page.getByRole("button", { name: "Beregn & tilpas" }).click();
+      await page.getByRole("button", { name: "Tilpas madplan" }).click();
       await page
         .getByRole("button", { name: "Opdatér aktivitetsvurdering" })
         .waitFor();
@@ -2260,10 +2304,7 @@ try {
         settingsAfter.profile.data.trainingActivity,
         settingsBefore.profile.data.trainingActivity,
       );
-      await page
-        .getByRole("button", { name: "Byt · 3 forslag" })
-        .first()
-        .click();
+      await page.getByRole("button", { name: "Byt · 3 valg" }).first().click();
       const dialog = page.getByRole("dialog", { name: "Byt måltid" });
       await dialog.waitFor();
       assert.equal(
@@ -2292,7 +2333,10 @@ try {
         beforeCancel.days,
         "Closing pending choice must not persist it",
       );
-      await page.getByText("Flere handlinger", { exact: true }).first().click();
+      await page
+        .locator(".meal-card:has(.status.planned) .s-more > summary")
+        .first()
+        .click();
       await page
         .getByRole("button", { name: "Tilpas portion", exact: true })
         .first()
@@ -2303,7 +2347,11 @@ try {
         .click();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       await page
-        .getByRole("button", { name: "Fjern", exact: true })
+        .locator(".meal-card:has(.status.planned) .s-more > summary")
+        .first()
+        .click();
+      await page
+        .getByRole("button", { name: "Fjern måltid", exact: true })
         .first()
         .click();
       await page.getByRole("button", { name: "Fortryd fjernelse" }).click();
@@ -2367,7 +2415,9 @@ try {
         .fill(browserPassword);
       await page.getByRole("button", { name: "Log ind", exact: true }).click();
       await page.waitForURL("**/app");
-      await page.getByRole("button", { name: "Start træning →" }).click();
+      await page
+        .getByRole("button", { name: "Start træning", exact: true })
+        .click();
       const input = page.locator('input[aria-label$="gentagelser"]').first();
       const label = await input.getAttribute("aria-label");
       await context.setOffline(true);
@@ -2375,7 +2425,9 @@ try {
       await page.getByRole("button", { name: "Luk træning" }).click();
       await context.setOffline(false);
       await page.reload();
-      await page.getByRole("button", { name: "Start træning →" }).click();
+      await page
+        .getByRole("button", { name: "Start træning", exact: true })
+        .click();
       await page.getByLabel(label!, { exact: true }).waitFor();
       await page.waitForFunction(
         (label) =>
@@ -2390,7 +2442,9 @@ try {
       );
       await page.getByText("✓ Gemt på din konto", { exact: true }).waitFor();
       await page.reload();
-      await page.getByRole("button", { name: "Start træning →" }).click();
+      await page
+        .getByRole("button", { name: "Start træning", exact: true })
+        .click();
       assert.equal(
         await page.getByLabel(label!, { exact: true }).inputValue(),
         "13",
@@ -2514,9 +2568,11 @@ try {
         }),
       );
       const page = await context.newPage();
-      await page.goto(env.APP_URL + "/app");
+      await page.goto(env.APP_URL + "/app/training");
       await page
-        .getByRole("button", { name: "Se og ret registrering" })
+        .locator(".s-activity")
+        .filter({ hasText: "Gennemført" })
+        .first()
         .click();
       await page.getByRole("dialog", { name: "Træningspas" }).waitFor();
       assert.equal(
@@ -2852,8 +2908,8 @@ try {
         await page.goto(env.APP_URL + "/app/food");
         await page.locator(".daily-nutrition").waitFor();
         const card = await page.locator(".daily-nutrition").innerText();
-        assert.match(card, /Planlagt protein\s*160\s*g/);
-        assert.match(card, /Minimumsmål: 102 g/);
+        assert.match(card, /160\s*g protein\s*planlagt/);
+        assert.match(card, /minimumsmål 102 g/);
         assert.match(card, /Registreret som spist: 0 kcal\s*· 0 g protein/);
         assert.ok(!card.includes("når ikke proteinmålet"));
       } finally {

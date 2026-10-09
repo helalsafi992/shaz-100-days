@@ -1,4 +1,9 @@
 "use client";
+import {
+  SimpleNavigation,
+  SimpleToday,
+  SimpleTraining,
+} from "./customer/SimpleExperience";
 import { portion } from "@/lib/meal-plan";
 import { portionMeasure } from "@/lib/portion-policy";
 import { useState, useEffect, useRef } from "react";
@@ -104,6 +109,18 @@ export default function Portal({
     ),
     [cardioOpen, setCardioOpen] = useState<string | undefined>();
   const [adjustId, setAdjustId] = useState<string | null>(null);
+  useEffect(() => {
+    setState(initial);
+  }, [initial]);
+  useEffect(() => {
+    if (view !== "training") return;
+    const params = new URLSearchParams(window.location.search);
+    const week = Number(params.get("week"));
+    if (Number.isInteger(week) && week >= 1 && week <= 15)
+      setSelectedWeek(week);
+    const cardio = params.get("cardio");
+    if (cardio) setCardioOpen(cardio);
+  }, [view, initial]);
   const p = state.profile.data;
   const complete = state.days.filter(
     (d) => d.plan.kind === "workout" && d.status === "completed",
@@ -171,36 +188,18 @@ export default function Portal({
     ["progress", "Fremgang", "▥"],
   ];
   return (
-    <div className="portal">
-      <header className="p-header">
-        <a className="logo" href="/app">
-          SHAZ<span>DIT 100-DAGES FORLØB</span>
-        </a>
-        <nav>
-          {navigation.map(([v, label]) => (
-            <a
-              key={v}
-              href={"/app/" + (v === "today" ? "" : v)}
-              className={view === v ? "current" : ""}
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-        <a
-          className="profile-link"
-          href="/app/profile"
-          aria-label="Profil og indstillinger"
-        >
-          Profil ↗
-        </a>
-      </header>
-      <main className="p-main">
+    <div className="portal s-workspace">
+      <SimpleNavigation view={view} />
+      <main className="p-main" id="customer-content">
         {state.reviewMode && (
-          <div className="review-banner">
-            TESTMILJØ · Indhold til gennemgang · Ingen faglig godkendelse
-            registreret
-          </div>
+          <details className="s-review">
+            <summary>Testkonto · indhold afventer godkendelse</summary>
+            <p>
+              Dette er det isolerede testmiljø. Trænings- og ernæringsregler er
+              til gennemgang, og der er ikke registreret faglig godkendelse.
+              Ingen rigtige betalinger.
+            </p>
+          </details>
         )}
         {message && (
           <div className="p-toast" role="status">
@@ -213,317 +212,49 @@ export default function Portal({
           </div>
         )}
         {view === "today" && (
-          <>
-            <div className="today-heading">
-              <span className="p-eyebrow">
-                {future
-                  ? `STARTER ${fmt(state.profile.start_date)}`
-                  : ended
-                    ? "FORLØBET ER AFSLUTTET"
-                    : `DAG ${state.day} AF 100 · UGE ${Math.min(15, Math.ceil(state.day / 7))}`}
-              </span>
-              <h1>{ended ? "Dit forløb i overblik." : "I dag."}</h1>
-            </div>
-            <div className="p-grid">
-              <section className="p-card primary-card">
-                <span className="p-eyebrow">
-                  {today?.plan.kind === "workout"
-                    ? "DAGENS TRÆNING"
-                    : ended
-                      ? "DIN OPSUMMERING"
-                      : "DAGENS FOKUS"}
-                </span>
-                <h2>
-                  {ended
-                    ? `${counts.strength} styrkepas og ${counts.cardio} cardiopas.`
-                    : today?.plan.kind !== "workout" && cardioToday
-                      ? cardioToday.plan.selected.title
-                      : calendar(state.today).otherSport.length
-                        ? calendar(state.today)
-                            .otherSport.map((s) => s.name)
-                            .join(" + ")
-                        : today?.plan.title || "Gør plads til din nye rytme."}
-                </h2>
-                {today?.plan.kind === "workout" ? (
-                  <>
-                    <div className="p-pills">
-                      <span>{today.plan.minutes} min.</span>
-                      <span>{today.plan.exercises.length} øvelser</span>
-                      <span>{today.plan.locationName || labels[p.place]}</span>
-                    </div>
-                    <p>
-                      Varm op. Følg rækkefølgen. Registrér det, du faktisk
-                      gennemfører.
-                    </p>
-                    <button
-                      className="p-button"
-                      onClick={() => setSelected(today)}
-                    >
-                      {today.status === "completed"
-                        ? "Se og ret registrering"
-                        : "Start træning →"}
-                    </button>
-                    {today.status !== "completed" && (
-                      <button
-                        className="activity-adjust"
-                        onClick={() => setAdjustId(today.id)}
-                      >
-                        Andet sted eller mindre tid i dag
-                      </button>
-                    )}
-                    {cardioToday && (
-                      <p>
-                        Dertil: {cardioToday.plan.selected.title} ·{" "}
-                        {cardioToday.plan.selected.minutes} min.{" "}
-                        <a href="/app/training#cardio">Se cardio →</a>
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <p>
-                      {ended || state.day === 100
-                        ? "Vælg to vaner, du vil fortsætte med. Sammenlign dine første og seneste registreringer i Fremgang. Du behøver ikke sætte en personlig rekord for at afslutte godt."
-                        : today?.plan.paused
-                          ? "Din træning er sat på pause. Historik og kladder er bevaret. Madplan og kaloriemål ændres ikke automatisk."
-                          : cardioToday
-                            ? `${cardioToday.plan.selected.minutes} minutters cardio. ${cardioToday.plan.selected.intensity}`
-                            : calendar(state.today).otherSport.length
-                              ? "Din anden sport indgår i ugeplanens belastning. Der tilføjes ikke automatisk ekstra træning."
-                              : "En restitutionsdag er en del af planen. Du skal ikke indhente et misset pas i dag."}
-                    </p>
-                    <a
-                      className="p-button"
-                      href={
-                        ended
-                          ? "/app/progress"
-                          : today?.plan.paused
-                            ? "/app/training#pause"
-                            : "/app/training#cardio"
-                      }
-                    >
-                      {ended
-                        ? "Se din registrerede fremgang"
-                        : "Se dagens plan →"}
-                    </a>
-                  </>
-                )}
-              </section>
-              {!ended && <FoodSummary today={state.today} />}
-            </div>
-            <div className="p-metrics">
-              <div>
-                <span>GENNEMFØRT</span>
-                <b>
-                  {complete.length}
-                  <small>styrkepas · {counts.cardio} cardiopas</small>
-                </b>
-              </div>
-              <div>
-                <span>DIN RYTME</span>
-                <b>
-                  {p.days}
-                  <small>styrkepas / uge · {p.cardio?.days || 0} cardio</small>
-                </b>
-              </div>
-              <div>
-                <span>DIT UDGANGSPUNKT</span>
-                <b className="text-metric">{labels[p.level]}</b>
-              </div>
-            </div>
-            <section className="p-card week-card">
-              <div>
-                <span className="p-eyebrow">DIN NÆSTE UGE</span>
-                <h2>Plads til både indsats og ro.</h2>
-              </div>
-              <div className="p-week">
-                {state.days
-                  .filter((d) => d.scheduled_date >= state.today)
-                  .sort((a, b) =>
-                    a.scheduled_date.localeCompare(b.scheduled_date),
-                  )
-                  .slice(0, 7)
-                  .map((d) => (
-                    <button
-                      key={d.id}
-                      disabled={!calendar(d.scheduled_date).hasActivity}
-                      className={
-                        calendar(d.scheduled_date).hasActivity ? "training" : ""
-                      }
-                      onClick={() =>
-                        d.plan.kind === "workout"
-                          ? setSelected(d)
-                          : location.assign("/app/training#cardio")
-                      }
-                    >
-                      <span>{fmt(d.scheduled_date)}</span>
-                      <b>{calendar(d.scheduled_date).label}</b>
-                      <small>Dag {d.day}</small>
-                    </button>
-                  ))}
-              </div>
-            </section>
-          </>
+          <SimpleToday
+            state={state}
+            onWorkout={setSelected}
+            onAdjust={setAdjustId}
+            food={
+              <FoodSummary
+                today={future ? state.profile.start_date : state.today}
+              />
+            }
+          />
         )}
         {view === "training" && (
-          <>
-            <PageHeading
-              eyebrow="DIN TRÆNING"
-              title="Din ugeplan."
-              text="Hvert pas har en rækkefølge og en grund. Hviledage tæller med i de 100 dage."
-            />
-            <div className="p-pills">
-              <span>{labels[p.place]}</span>
-              <span>{labels[p.level]}</span>
-              <span>{p.days} dage / uge</span>
-              <span>{p.minutes} min. / pas</span>
-            </div>
-            <p>
-              <a className="p-secondary" href="/onboarding?edit=1">
-                Tilpas styrke, udstyr og ugerytme
-              </a>
-            </p>
-            <CardioPlanner
-              profile={p}
-              rows={state.cardio || []}
-              today={state.today}
-              refresh={refreshState}
-              openId={cardioOpen}
-              clearOpen={() => setCardioOpen(undefined)}
-              showList={false}
-            />
-            <div className="training-weeks">
-              <label>
-                Vælg uge
-                <select
-                  value={selectedWeek}
-                  onChange={(e) => setSelectedWeek(Number(e.target.value))}
-                >
-                  {Array.from({ length: 15 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>
-                      Uge {i + 1} · Dag {i * 7 + 1}–{Math.min(100, (i + 1) * 7)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {[selectedWeek].map((week) => (
-                <details key={week} open>
-                  <summary>
-                    <span>UGE {String(week).padStart(2, "0")}</span>
-                    <b>
-                      {state.days.find((d) => d.plan.week === week)?.plan.phase}
-                    </b>
-                    <span>+</span>
-                  </summary>
-                  {state.days
-                    .filter((d) => d.plan.week === week)
-                    .map((d) => (
-                      <div key={d.id} className="calendar-day">
-                        <div className="calendar-date">
-                          <b>{fmt(d.scheduled_date)}</b>
-                          <span>
-                            Dag {d.day} · {calendar(d.scheduled_date).label}
-                          </span>
-                        </div>
-                        {d.plan.kind === "workout" && (
-                          <div className="training-day">
-                            <span>STYRKE</span>
-                            <div>
-                              <b>{d.plan.title}</b>
-                              <small>
-                                {d.plan.minutes} min. ·{" "}
-                                {d.plan.exercises.length} øvelser ·{" "}
-                                {d.plan.locationName || labels[p.place]}
-                              </small>
-                            </div>
-                            <span className={"status " + d.status}>
-                              {d.status === "completed"
-                                ? "✓ Gennemført"
-                                : d.status === "skipped"
-                                  ? "Sprunget over"
-                                  : "Planlagt"}
-                            </span>
-                            <button
-                              className="p-secondary"
-                              onClick={() => setSelected(d)}
-                            >
-                              {d.status === "completed"
-                                ? "Se registrering"
-                                : "Se pas"}
-                            </button>
-                          </div>
-                        )}
-                        {(state.cardio || [])
-                          .filter(
-                            (c) =>
-                              c.scheduled_date === d.scheduled_date &&
-                              c.status !== "removed" &&
-                              c.status !== "paused",
-                          )
-                          .map((c) => (
-                            <div className="training-day" key={c.id}>
-                              <span>CARDIO</span>
-                              <div>
-                                <b>{c.plan.selected.title}</b>
-                                <small>
-                                  {c.plan.selected.minutes} min. ·{" "}
-                                  {c.plan.selected.intensity}
-                                </small>
-                              </div>
-                              <span className={"status " + c.status}>
-                                {c.status === "completed"
-                                  ? "✓ Gennemført"
-                                  : c.status === "skipped"
-                                    ? "Sprunget over"
-                                    : "Planlagt"}
-                              </span>
-                              <button
-                                className="p-secondary"
-                                onClick={() => setCardioOpen(c.id)}
-                              >
-                                {c.status === "completed"
-                                  ? "Se cardioregistrering"
-                                  : "Se cardio"}
-                              </button>
-                            </div>
-                          ))}
-                        {calendar(d.scheduled_date).otherSport.map((s, i) => (
-                          <div className="training-day" key={"sport-" + i}>
-                            <span>ANDEN SPORT</span>
-                            <div>
-                              <b>{s.name}</b>
-                              <small>
-                                {s.minutes} min. ·{" "}
-                                {s.hard ? "Høj belastning" : "Let/moderat"}
-                              </small>
-                            </div>
-                          </div>
-                        ))}
-                        {!calendar(d.scheduled_date).hasActivity && (
-                          <p className="p-note">
-                            {d.plan.kind === "finish"
-                              ? "Dag 100 · Afslutning og dine næste skridt."
-                              : d.plan.paused
-                                ? "Planlagt pause. Dine tidligere registreringer og kladder er bevaret."
-                                : "Restitution. Missede pas flyttes ikke automatisk til i morgen."}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+          <SimpleTraining
+            state={state}
+            week={selectedWeek}
+            setWeek={setSelectedWeek}
+            onWorkout={setSelected}
+            onCardio={setCardioOpen}
+            onAdjust={setAdjustId}
+            configuration={
+              <>
+                <CardioPlanner
+                  compact
+                  profile={p}
+                  rows={state.cardio || []}
+                  today={state.today}
+                  refresh={refreshState}
+                  openId={cardioOpen}
+                  clearOpen={() => setCardioOpen(undefined)}
+                  showList={false}
+                />
+                <details className="s-pause-options" id="pause">
+                  <summary>Pause ved sygdom eller rejse</summary>
+                  <ScheduleBreaks
+                    breaks={state.breaks || []}
+                    today={state.today}
+                    start={state.profile.start_date}
+                    refresh={refreshState}
+                  />
                 </details>
-              ))}
-            </div>
-            <ScheduleBreaks
-              breaks={state.breaks || []}
-              today={state.today}
-              start={state.profile.start_date}
-              refresh={refreshState}
-            />
-            <p className="p-note">
-              Belastningen øges ikke automatisk. Dine registrerede sæt og
-              oplevede anstrengelse bruges til et forslag, du selv vurderer.
-            </p>
-          </>
+              </>
+            }
+          />
         )}
         {view === "food" && (
           <FoodPlanner
@@ -545,8 +276,8 @@ export default function Portal({
           <>
             <PageHeading
               eyebrow="DIN FREMGANG"
-              title="Det, du faktisk har gjort."
-              text="Ingen opdigtede tal. Her ser du dine egne registreringer, også når fremskridtet er at møde op igen."
+              title="Fremgang"
+              text="Dine registreringer. Uge for uge."
             />
             <div className="p-metrics">
               <div>
@@ -576,16 +307,16 @@ export default function Portal({
               </div>
             </div>
             <div className="p-grid">
-              <section className="p-card">
-                <h2>Ugens check-in.</h2>
+              <details className="p-card s-checkin">
+                <summary>Ugens check-in</summary>
                 <Checkin
                   state={state}
                   busy={busy || ended || future}
                   action={action}
                 />
-              </section>
-              <section className="p-card">
-                <h2>Vægt er valgfrit.</h2>
+              </details>
+              <details className="p-card s-weight-form">
+                <summary>Se og registrér vægt</summary>
                 <p>
                   Du kan følge styrke og gennemførelse uden at veje dig. En
                   enkelt måling ændrer aldrig planen.
@@ -595,7 +326,7 @@ export default function Portal({
                   busy={busy || ended || future}
                   action={action}
                 />
-              </section>
+              </details>
             </div>
             <section className="p-card">
               <h2>Din styrkehistorik.</h2>
@@ -674,18 +405,6 @@ export default function Portal({
           </>
         )}
       </main>
-      <nav className="p-mobile-nav">
-        {navigation.map(([v, label, icon]) => (
-          <a
-            href={"/app/" + (v === "today" ? "" : v)}
-            className={view === v ? "current" : ""}
-            key={v}
-          >
-            <span aria-hidden>{icon}</span>
-            {label}
-          </a>
-        ))}
-      </nav>
       {adjustId && (
         <SessionAdjustment
           id={adjustId}
@@ -696,6 +415,7 @@ export default function Portal({
       )}
       {selected && (
         <Workout
+          key={selected.id}
           day={selected}
           state={state}
           busy={busy}
@@ -1191,22 +911,27 @@ function Workout({
             ))}
           </ol>
         </details>
-        <nav className="exercise-steps" aria-label="Øvelsesoversigt">
-          {day.plan.exercises.map((e, i) => (
-            <button
-              key={e.id}
-              className={i === focusIndex ? "chosen" : ""}
-              aria-label={e.name}
-              aria-current={i === focusIndex ? "step" : undefined}
-              onClick={() => {
-                void flush();
-                setFocusIndex(i);
-              }}
-            >
-              {i + 1}
-            </button>
-          ))}
-        </nav>
+        <details className="s-exercise-list">
+          <summary>
+            Øvelse {focusIndex + 1} af {day.plan.exercises.length} · Se oversigt
+          </summary>
+          <nav className="exercise-steps" aria-label="Øvelsesoversigt">
+            {day.plan.exercises.map((e, i) => (
+              <button
+                key={e.id}
+                className={i === focusIndex ? "chosen" : ""}
+                aria-label={e.name}
+                aria-current={i === focusIndex ? "step" : undefined}
+                onClick={() => {
+                  void flush();
+                  setFocusIndex(i);
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </nav>
+        </details>
         {day.plan.exercises.map((e, index) => {
           if (index !== focusIndex) return null;
           const history = state.days

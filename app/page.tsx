@@ -46,7 +46,7 @@ export default async function Home() {
     );
   }
   return (
-    <>
+    <div className="public-simple">
       <header className="header">
         <a className="logo" href="/">
           SHAZ<span>100 DAY SYSTEM</span>
@@ -68,10 +68,8 @@ export default async function Home() {
             <div>
               <span className="eyebrow">ET SYSTEM. 100 DAGE. DIN HVERDAG.</span>
               <h1>
-                Din træning.
-                <br />
-                Din madplan.
-                <br />
+                Din træning. <br />
+                Din madplan. <br />
                 <span>Dine næste 100 dage.</span>
               </h1>
               <p className="herodesc">
@@ -302,6 +300,6 @@ export default async function Home() {
         </div>
         <Buy />
       </div>
-    </>
+    </div>
   );
 }

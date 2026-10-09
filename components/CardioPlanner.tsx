@@ -18,10 +18,12 @@ export default function CardioPlanner({
   openId,
   clearOpen,
   showList = true,
+  compact = false,
 }: {
   openId?: string;
   clearOpen?: () => void;
   showList?: boolean;
+  compact?: boolean;
   profile: Profile;
   rows: CardioRow[];
   today: string;
@@ -99,7 +101,10 @@ export default function CardioPlanner({
     )
     .slice(0, 6);
   return (
-    <section className="p-card cardio-planner" id="cardio">
+    <section
+      className={"p-card cardio-planner " + (compact ? "s-cardio-compact" : "")}
+      id="cardio"
+    >
       <div className="p-section-head">
         <div>
           <span className="p-eyebrow">KONDITION & RESTITUTION</span>
