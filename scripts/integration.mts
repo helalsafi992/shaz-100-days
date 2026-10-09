@@ -2987,6 +2987,78 @@ try {
     },
   );
   await check(
+    "Customer onboarding: contextual kg/lbs and km/miles goals, compact health screening and 320–1440px accessibility",
+    async () => {
+      for (const width of [320, 390, 1440]) {
+        const context = await browser.newContext({
+          viewport: { width, height: width === 1440 ? 1000 : 844 },
+        });
+        try {
+          const pairs = users[0].cookie.split("; ").map((c) => {
+            const i = c.indexOf("=");
+            return { name: c.slice(0, i), value: c.slice(i + 1), url: env.APP_URL };
+          });
+          await context.addCookies(pairs);
+          const page = await context.newPage();
+          const errors: string[] = [];
+          page.on("pageerror", (e) => errors.push(e.message));
+          const response = await page.goto(env.APP_URL + "/onboarding?edit=1", { waitUntil: "networkidle" });
+          assert.equal(response?.status(), 200);
+          await page.locator(".goal-yes-no").waitFor();
+          assert.equal(await page.locator(".goal-extra").count(), 0, "The target fields should be optional by default");
+
+          await page.getByRole("button", { name: "Ja, jeg har et mål" }).click();
+          await page.getByRole("button", { name: "Kropsvægt", exact: true }).click();
+          const unitChoices = page.getByRole("group", { name: "Enhed for dit mål" });
+          assert.equal(await unitChoices.getByRole("button").count(), 2);
+          await unitChoices.getByRole("button", { name: /lbs/ }).click();
+          await page.getByRole("textbox", { name: /Din vægt nu/ }).fill("220,46");
+          await unitChoices.getByRole("button", { name: "kg", exact: true }).click();
+          const inKg = await page.getByRole("textbox", { name: /Din vægt nu/ }).inputValue();
+          assert.ok(Math.abs(Number(inKg.replace(",", ".")) - 100) < 0.02, "Changing kg/lbs must preserve the physical value");
+
+          await page.getByRole("button", { name: "Løb eller gåtur" }).click();
+          await unitChoices.getByRole("button", { name: "miles" }).click();
+          await page.getByRole("textbox", { name: /Så langt kan du gå eller løbe nu/ }).fill("5");
+          await unitChoices.getByRole("button", { name: "km", exact: true }).click();
+          const inKm = await page.getByRole("textbox", { name: /Så langt kan du gå eller løbe nu/ }).inputValue();
+          assert.ok(Math.abs(Number(inKm.replace(",", ".")) - 8.05) < 0.02, "Changing km/miles must preserve the distance");
+          await page.getByRole("button", { name: "Nej, ikke lige nu" }).click();
+          assert.equal(await page.locator(".goal-extra").count(), 0);
+
+          const healthDesc = await page.locator(".compact-health").count();
+          assert.equal(healthDesc, 0, "Health questions must not clutter the first step");
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Horizontal overflow at " + width);
+          assert.deepEqual(errors, []);
+
+          if (width === 390) {
+            // The health screen must remain three questions before the user opts into details.
+            await page.getByRole("button", { name: "18–39 år" }).click();
+            await page.getByRole("button", { name: "Helt ny" }).click();
+            await page.getByLabel("Jeg er mindst 18 år.").check();
+            await page.getByLabel(/Jeg samtykker til, at SHAZ gemmer mine helbredssvar/).check();
+            await page.getByRole("button", { name: /Gem og fortsæt/ }).click();
+            await page.getByRole("heading", { name: "Din uge" }).waitFor();
+            await page.getByRole("button", { name: /Gem og fortsæt/ }).click();
+            await page.getByRole("heading", { name: "Dine hensyn" }).waitFor();
+            assert.equal(await page.locator(".compact-health > .shaz-question").count(), 3);
+            assert.equal(await page.getByRole("button", { name: "Ja eller jeg er i tvivl" }).count(), 2);
+            await page.getByRole("button", { name: "Aktuelle gener" }).click();
+            await page.getByText("Hvor sidder generne?").waitFor();
+            const advanced = page.locator(".advanced-health");
+            assert.equal(await advanced.count(), 1);
+            assert.equal(await advanced.evaluate((node: HTMLDetailsElement) => node.open), false, "Optional injury details must stay collapsed");
+            await page.getByRole("button", { name: "Ingen gener" }).click();
+            assert.equal(await advanced.count(), 0);
+          }
+          await page.screenshot({ path: "test-artifacts/onboarding-clean-" + width + ".png", fullPage: true });
+        } finally {
+          await context.close();
+        }
+      }
+    },
+  );
+  await check(
     "O01: database connection outage fails closed; signed webhook retry recovers exactly once",
     async () => {
       const before = await snapshot(pauseFixture.id);
