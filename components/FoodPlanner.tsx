@@ -979,6 +979,8 @@ export default function FoodPlanner({
                 >
                   <option value="all">Spiser det meste</option>
                   <option value="vegetarian">Vegetarisk</option>
+                  <option value="vegan">Vegansk</option>
+                  <option value="pescatarian">Pescetarisk</option>
                   {form.diet === "halal" && (
                     <option value="halal">
                       Halal-egnet (eksisterende valg)
