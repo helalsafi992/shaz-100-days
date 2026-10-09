@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   defaults,
   labels,
@@ -13,13 +13,15 @@ import TrainingSettings from "./TrainingSettings";
 import ActivitySettings from "./ActivitySettings";
 import { activitySettings } from "@/lib/activity-settings";
 import { deficitLevels } from "@/lib/nutrition";
+import { intakeVersion } from "@/lib/ai/intake";
 const titles = [
   "Mål og udgangspunkt.",
-  "Træning, cardio og din uge.",
-  "Mad, beregning og måltider.",
+  "Din træning og dine dage.",
+  "Sikkerhed og begrænsninger.",
+  "Din madplan.",
   "Klar til dine 100 dage.",
 ];
-const storedSteps = [0, 1, 4, 7];
+const storedSteps = [0, 1, 1, 4, 7];
 export default function Onboarding({
   initial,
   initialStep = 0,
@@ -35,7 +37,7 @@ export default function Onboarding({
       ...activitySettings(initial),
     }),
     [step, setStep] = useState(
-      initialStep >= 7 ? 3 : initialStep >= 4 ? 2 : initialStep >= 1 ? 1 : 0,
+      initialStep >= 7 ? 4 : initialStep >= 4 ? 3 : initialStep >= 1 ? 1 : 0,
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
