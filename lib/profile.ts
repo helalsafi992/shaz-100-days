@@ -49,6 +49,7 @@ export const scheduleSchema = z.object({
 });
 export const profileFields = z.object({
   goal: z.enum(["fat-loss", "muscle", "fitness", "maintain"]),
+  personalizationVersion: z.literal("shaz-intake-2026-10-09-v1").optional(),
   level: z.enum(["beginner", "intermediate", "experienced"]),
   place: z.enum(["home", "gym", "both"]),
   equipment: equipmentSchema,
