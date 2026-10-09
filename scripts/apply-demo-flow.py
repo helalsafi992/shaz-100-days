@@ -21,5 +21,15 @@ for item in json.loads((root/'scripts/demo-flow-changes.json').read_text()):
     assert hashlib.sha256(data).hexdigest()==item['after'], 'Output checksum mismatch: '+item['path']
     pending.append((p,data))
 for p,data in pending:p.write_bytes(data)
+p=root/'components/GeneratedPlanReview.tsx'
+s=p.read_text()
+old="if(configuration?.mode==='coach-review'||(configuration&&configuration.mode===undefined))"
+assert s.count(old)==1
+p.write_text(s.replace(old,"if(configuration?.mode==='coach-review')"))
+p=root/'scripts/intake-regression.mts'
+s=p.read_text()
+old='configuration:{enabled:true,reason:null}'
+assert s.count(old)==1
+p.write_text(s.replace(old,"configuration:{enabled:true,reason:null,mode:'coach-review'}"))
 marker.write_text('# Demo correction applied\n\nValidation is recorded in the workflow, not inferred from this marker.\n')
 print('Applied direct demo flow without changing cardio or exercise substitution logic.')
