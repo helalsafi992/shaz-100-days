@@ -1,4 +1,6 @@
 "use client";
+import GoalSummaryCard from "./GoalSummaryCard";
+import type { MeasurableGoal } from "@/lib/goal-summary";
 import {
   SimpleNavigation,
   SimpleToday,
@@ -94,9 +96,11 @@ const fmt = (date: string) =>
 export default function Portal({
   initial,
   view = "today",
+  goal = null,
 }: {
   initial: PlatformState;
   view?: string;
+  goal?: MeasurableGoal | null;
 }) {
   const [state, setState] = useState(initial),
     [message, setMessage] = useState(""),
@@ -279,6 +283,7 @@ export default function Portal({
               title="Fremgang"
               text="Dine registreringer. Uge for uge."
             />
+            <GoalSummaryCard goal={goal} weights={state.weights} sets={complete.flatMap((d) => d.log.sets || [])} />
             <div className="p-metrics">
               <div>
                 <span>GENNEMFØRT</span>
