@@ -1,0 +1,21 @@
+/* Related goal inputs belong inside their own question; no new portal theme. */
+.portal.onboarding .goal-target{grid-column:1/-1;}
+.portal.onboarding .goal-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:18px;padding-top:16px;border-top:1px solid var(--onboard-line);}
+.portal.onboarding .goal-fields label{font-size:14px;line-height:1.45;margin:0;min-width:0;display:grid;gap:8px;align-content:start;}
+.portal.onboarding .goal-fields input,.portal.onboarding .goal-fields select{min-width:0;min-height:48px;width:100%;font-size:16px;}
+.portal.onboarding .goal-fields small{font-size:12px;font-weight:400;color:var(--onboard-muted);}
+.portal.onboarding .goal-full{grid-column:1/-1;}
+.portal.onboarding .goal-fields details{margin:0;padding:0;border:0;}
+.portal.onboarding .goal-fields summary{font-size:13px;min-height:44px;cursor:pointer;}
+.portal.onboarding .optional-label{font-size:12px;font-weight:400;color:var(--onboard-muted);margin-left:6px;}
+.portal.onboarding .compact-health{grid-template-columns:minmax(0,1fr);}
+.portal.onboarding .compact-health>.shaz-question .shaz-choice-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+.portal.onboarding .compact-health>.shaz-question .p-note{font-size:13px;line-height:1.65;}
+.portal.onboarding .onboard-disclosure{border:1px solid var(--onboard-line);background:white;border-radius:12px;padding:10px 16px;margin:18px 0;}
+.portal.onboarding .onboard-disclosure>summary{min-height:44px;font-size:14px;line-height:1.5;font-weight:600;cursor:pointer;}
+.portal.onboarding .schedule-summary .p-list-row{gap:12px;line-height:1.5;flex-wrap:wrap;}
+.portal.onboarding .food-exclusions{margin:20px 0;}
+.portal.onboarding .summary-card{background:#fff;color:#213329;padding:20px;border:1px solid #dbe5d5;}
+.portal.onboarding .summary-card h2{color:#213329;font-size:23px;line-height:1.25;margin:10px 0;}
+.portal.onboarding .summary-card p{color:#4a604f;font-size:14px;line-height:1.5;margin:8px 0;}
+@media(max-width:480px){.portal.onboarding .goal-fields{grid-template-columns:minmax(0,1fr);}.portal.onboarding .schedule-summary .p-list-row strong{font-size:14px;}}

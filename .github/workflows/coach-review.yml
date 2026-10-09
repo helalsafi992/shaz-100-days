@@ -1,0 +1,64 @@
+name: SHAZ coach review and flexible training
+on:
+  push:
+    branches: [feat/coach-review-flexible-training]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: shaz-coach-review
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Materialize guarded source changes
+        run: python3 scripts/apply-coach-source.py
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Existing customer and database regressions
+        run: npm run test:integration
+      - name: Client submission, MFA coach approval, swaps and history
+        run: node --import tsx scripts/intake-regression.mts
+      - name: Commit only validated source to this branch
+        if: success()
+        run: |
+          git add app components lib tests scripts/integration.mts scripts/intake-regression.mts docs/COACH_REVIEW_SOURCE_APPLIED.md
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Materialize verified coach approval, flexible cardio and three exercise choices'
+            git push origin HEAD:feat/coach-review-flexible-training
+          fi
+          mkdir -p test-artifacts
+          git rev-parse HEAD > test-artifacts/tested-source-commit.txt
+      - name: Evidence and tested source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coach-review-evidence
+          path: |
+            test-artifacts
+            app
+            components
+            lib
+            migrations
+            scripts
+            tests
+            docs/COACH_REVIEW_CHANGE.md
+            package.json
+            package-lock.json
+            tsconfig.json
+            next.config.ts
+          if-no-files-found: error
+          retention-days: 7

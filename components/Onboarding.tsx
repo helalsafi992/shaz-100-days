@@ -1,531 +1,64 @@
 "use client";
-import { useState } from "react";
-import {
-  defaults,
-  labels,
-  energy,
-  type Profile,
-  localDate,
-} from "@/lib/profile";
-import { exercises } from "@/lib/training";
-import { ingredients } from "@/lib/recipes";
-import TrainingSettings from "./TrainingSettings";
-import ActivitySettings from "./ActivitySettings";
-import { activitySettings } from "@/lib/activity-settings";
-import { deficitLevels } from "@/lib/nutrition";
-const titles = [
-  "Mål og udgangspunkt.",
-  "Træning, cardio og din uge.",
-  "Mad, beregning og måltider.",
-  "Klar til dine 100 dage.",
-];
-const storedSteps = [0, 1, 4, 7];
-export default function Onboarding({
-  initial,
-  initialStep = 0,
-  editing = false,
-}: {
-  initial: Profile;
-  initialStep?: number;
-  editing?: boolean;
-}) {
-  const [p, setP] = useState<Profile>({
-      ...defaults,
-      ...initial,
-      ...activitySettings(initial),
-    }),
-    [step, setStep] = useState(
-      initialStep >= 7 ? 3 : initialStep >= 4 ? 2 : initialStep >= 1 ? 1 : 0,
-    ),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [planPreview, setPlanPreview] = useState<any>(null),
-    [startConfirmed, setStartConfirmed] = useState(editing);
-  const calculation = energy(p);
-  function field<K extends keyof Profile>(k: K, v: Profile[K]) {
-    setPlanPreview(null);
-    setP((x) => ({
-      ...x,
-      ...(k === "nutrition" && v === "calculated"
-        ? {
-            ...activitySettings(x),
-          }
-        : {}),
-      [k]: v,
-    }));
-  }
-  async function save(next: number, activate = false) {
-    if (editing && !activate) {
-      setStep(next);
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      if (editing && activate) {
-        const r = await fetch(
-          "/api/plan/" +
-            (planPreview ? "training-confirm" : "training-preview"),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              data: p,
-              expectedVersion: planPreview?.version,
-              fingerprint: planPreview?.fingerprint,
-            }),
-          },
-        );
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error);
-        if (!planPreview) {
-          setPlanPreview(d);
-          return;
-        }
-        location.href = "/app";
-        return;
-      }
-      const r = await fetch("/api/platform/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: p, step: storedSteps[next] }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      if (activate) {
-        if (!editing) {
-          const a = await fetch("/api/platform/activate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ confirmStart: true }),
-          });
-          const b = await a.json();
-          if (!a.ok) throw new Error(b.error);
-        }
-        location.href = "/app";
-      } else setStep(next);
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Kunne ikke gemme. Dine valg er bevaret.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  function choices<K extends keyof Profile>(
-    key: K,
-    options: Profile[K][],
-    names?: string[],
-  ) {
-    return (
-      <div className="p-choices">
-        {options.map((v, i) => (
-          <button
-            key={String(v)}
-            className={p[key] === v ? "chosen" : ""}
-            onClick={() => field(key, v)}
-          >
-            {names?.[i] || labels[String(v)] || String(v)}
-          </button>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <main className="portal onboarding">
-      <header className="p-top">
-        <a className="logo" href="/">
-          SHAZ
-        </a>
-        <a href="/app">Min konto</a>
-      </header>
-      <section className="onboard-shell">
-        <div className="onboard-progress">
-          <span>{editing ? "TILPAS DIN PLAN" : "DIT UDGANGSPUNKT"}</span>
-          <span>{step === 3 ? "OPSUMMERING" : `DEL ${step + 1} AF 3`}</span>
-        </div>
-        <div className="p-track">
-          <i style={{ width: `${((step + 1) / 4) * 100}%` }} />
-        </div>
-        <h1>{titles[step]}</h1>
-        <p className="p-muted">
-          {editing
-            ? "Ændringer gælder fremtidige, ikke påbegyndte træninger. Din historik bevares."
-            : "Dine valg gemmes på din konto, når du fortsætter. Du kan vende tilbage på en anden enhed."}
-        </p>
-        {step === 0 && (
-          <>
-            <h2>Hvad vil du arbejde mod?</h2>
-            {choices("goal", ["fat-loss", "muscle", "fitness", "maintain"])}
-            <h2>Din træningserfaring</h2>
-            {choices("level", ["beginner", "intermediate", "experienced"])}
-            <p className="p-note">
-              Et selvstyret forløb for voksne. Ved skader, sygdom, graviditet
-              eller andre særlige behov skal en relevant fagperson vurdere, om
-              træningen passer til dig. Skriv ikke diagnoser her.
-            </p>
-          </>
-        )}
-        {step === 1 && (
-          <TrainingSettings
-            value={p}
-            onChange={(v) => {
-              setP(v);
-              setPlanPreview(null);
-            }}
-          />
-        )}
-        {step === 2 && (
-          <>
-            <h2>Kostpræferencer</h2>
-            {choices("diet", ["all", "vegetarian"])}
-            <label className="p-check">
-              <input
-                type="checkbox"
-                checked={p.halal || p.diet === "halal"}
-                onChange={(e) => field("halal", e.target.checked)}
-              />
-              Halal-egnede ingredienstyper (kan kombineres med vegetarisk)
-            </label>
-            <h2>Madlavningstid</h2>
-            {choices(
-              "cookTime",
-              [15, 30, 60],
-              ["Op til 15 min.", "Op til 30 min.", "Op til 60 min."],
-            )}
-            <h2>Det vil du undgå</h2>
-            <div className="avoid-grid">
-              {[
-                ["milk", "Mælk"],
-                ["gluten", "Glutenholdige råvarer"],
-                ["nuts", "Mandler/nødder"],
-                ["peanut", "Peanuts"],
-                ["egg", "Æg"],
-                ["soy", "Soja"],
-                ["fish", "Fisk"],
-                ...ingredients
-                  .filter((x) => !["oil"].includes(x.id))
-                  .map((i) => [i.id, i.name]),
-              ].map(([v, n]) => (
-                <label className="p-check" key={v}>
-                  <input
-                    type="checkbox"
-                    checked={p.avoid.includes(v)}
-                    onChange={(e) =>
-                      field(
-                        "avoid",
-                        e.target.checked
-                          ? [...p.avoid, v]
-                          : p.avoid.filter((x) => x !== v),
-                      )
-                    }
-                  />
-                  {n}
-                </label>
-              ))}
-            </div>
-            <p className="p-note">
-              Filtre følger opskriftens råvarer og garanterer ikke fravær af
-              allergener eller krydskontaminering. Ved halal: vælg selv passende
-              certificerede produkter, især kød.
-            </p>
-          </>
-        )}
-        {step === 2 && (
-          <>
-            <h2>Din beregning</h2>
-            {choices("nutrition", ["portions", "calculated"])}
-            <label>
-              Måltider pr. dag
-              <select
-                value={p.mealCount || 4}
-                onChange={(e) =>
-                  setP({
-                    ...p,
-                    mealCount: Number(e.target.value),
-                    mealNames: undefined,
-                    mealTimes: undefined,
-                  })
-                }
-              >
-                {[2, 3, 4, 5, 6].map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <p className="p-note">
-              Samme dagsmål fordeles på dit valgte antal måltider. Du kan
-              navngive dem og ændre tidspunkterne i madplanen.
-            </p>
-            {p.goal === "fat-loss" && p.nutrition === "calculated" && (
-              <label>
-                Ønsket underskud
-                <select
-                  value={p.deficitLevel || "moderate"}
-                  onChange={(e) =>
-                    field(
-                      "deficitLevel",
-                      e.target.value as Profile["deficitLevel"],
-                    )
-                  }
-                >
-                  {deficitLevels.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} · {l.percent}%
-                    </option>
-                  ))}
-                </select>
-                <small>
-                  Produktindstillinger til faglig gennemgang. Uegnede valg
-                  blokeres. Aggressivt kræver løbende evaluering og gives aldrig
-                  for alle 100 dage.
-                </small>
-              </label>
-            )}
-            <div className="p-card">
-              <h2>Portioner er et godt udgangspunkt.</h2>
-              <p>
-                Byg hovedmåltider med grøntsager, en proteinkilde,
-                kartofler/fuldkorn og lidt fedt. Brug opskrifterne som
-                inspiration og tilpas efter sult og mæthed. Ingen
-                vægtregistrering er nødvendig.
-              </p>
-            </div>
-            <p className="p-note">
-              Energiberegning er valgfri og et usikkert skøn. Den er ikke til
-              gravide, ammende, personer med spiseforstyrrelser eller til
-              medicinske diæter.
-            </p>
-          </>
-        )}
-        {step === 2 &&
-          (p.nutrition === "portions" ? (
-            <div className="p-card">
-              <span className="p-eyebrow">INGEN TAL PÅ KROPPEN KRÆVET</span>
-              <h2>Du har valgt portioner.</h2>
-              <p>
-                Din vægt, højde, alder og beregningskategori behøves ikke. Du
-                får opskrifter, madplan og indkøbsliste uden kalorimål.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="p-fields">
-                {(["age", "height", "weight"] as const).map((k, i) => (
-                  <label key={k}>
-                    {["Alder i år", "Højde i cm", "Vægt i kg"][i]}
-                    <input
-                      type="number"
-                      step={k === "weight" ? "0.1" : "1"}
-                      value={p[k] || ""}
-                      onChange={(e) => field(k, Number(e.target.value))}
-                    />
-                  </label>
-                ))}
-              </div>
-              <label>
-                Beregningskategori
-                <select
-                  value={p.sex || ""}
-                  onChange={(e) =>
-                    field("sex", e.target.value as Profile["sex"])
-                  }
-                >
-                  <option value="">Vælg</option>
-                  <option value="female">Kvindelig koefficient</option>
-                  <option value="male">Mandlig koefficient</option>
-                </select>
-              </label>
-              <p className="p-note">
-                Den oprindelige Mifflin–St Jeor-formel bruger to biologiske
-                kategorier. Vælg portioner, hvis den ikke passer til dig.
-              </p>
-              <ActivitySettings
-                value={p}
-                onChange={(next) => {
-                  setP((x) => ({ ...x, ...next }));
-                  setPlanPreview(null);
-                }}
-              />
-              <p className="p-note">
-                Mifflin–St Jeor og én aktivitetsfaktor for hverdag plus træning.
-                Vi lægger ikke træningens forbrænding oveni igen.
-              </p>
-              <label className="p-check">
-                <input
-                  type="checkbox"
-                  checked={p.calculationSuitable || false}
-                  onChange={(e) =>
-                    field("calculationSuitable", e.target.checked)
-                  }
-                />
-                Jeg er 18–64 år, ikke gravid/ammende og har ikke behov for en
-                medicinsk diæt eller behandling af spiseforstyrrelse.
-              </label>
-              <label className="p-check">
-                <input
-                  type="checkbox"
-                  checked={p.dataConsent || false}
-                  onChange={(e) => field("dataConsent", e.target.checked)}
-                />
-                Jeg giver udtrykkeligt samtykke til at gemme disse valg til
-                energiberegningen. Jeg kan vælge portioner og fjerne
-                oplysningerne igen.
-              </label>
-              {calculation && (
-                <p className="p-notice">
-                  {calculation.available
-                    ? `Estimeret ligevægt: ${calculation.maintenance} kcal → underskud ${calculation.percent}% / ${calculation.deficit} kcal → mål ${calculation.kcal} kcal. Madplanens faktiske total vises efter aktivering.`
-                    : calculation.explanation}
-                </p>
-              )}
-            </>
-          ))}
-        {step === 1 && (
-          <details>
-            <summary>Øvelser jeg foretrækker at undgå</summary>
-            <p className="p-note">
-              Valgene ændrer fremtidige pas. Hvis en funktion ikke kan dækkes
-              med dit udstyr, beder vi dig justere valgene.
-            </p>
-            {exercises.map((e) => (
-              <label className="p-check" key={e.id}>
-                <input
-                  type="checkbox"
-                  checked={(p.exerciseAvoid || []).includes(e.id)}
-                  onChange={(ev) =>
-                    field(
-                      "exerciseAvoid",
-                      ev.target.checked
-                        ? [...(p.exerciseAvoid || []), e.id]
-                        : (p.exerciseAvoid || []).filter((x) => x !== e.id),
-                    )
-                  }
-                />
-                {e.name}
-              </label>
-            ))}
-          </details>
-        )}
-        {step === 3 && (
-          <>
-            <div className="p-card summary-card">
-              <span className="p-eyebrow">DET HER ER DIN PLAN</span>
-              <h2>
-                {p.days} dage om ugen.
-                <br />
-                {labels[p.place]}. Dit tempo.
-              </h2>
-              <dl>
-                <div>
-                  <dt>Udgangspunkt</dt>
-                  <dd>{labels[p.level]}</dd>
-                </div>
-                <div>
-                  <dt>Mål</dt>
-                  <dd>{labels[p.goal]}</dd>
-                </div>
-                <div>
-                  <dt>Styrke / cardio</dt>
-                  <dd>
-                    {p.days} styrkepas á {p.minutes} min. ·{" "}
-                    {p.cardio?.days || 0} cardiopas
-                  </dd>
-                </div>
-                <div>
-                  <dt>Kost</dt>
-                  <dd>
-                    {labels[p.diet]} · {p.mealCount || 4} måltider ·{" "}
-                    {labels[p.nutrition]}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-            {!editing && (
-              <label>
-                Hvornår skal dag 1 begynde?
-                <input
-                  type="date"
-                  min={localDate()}
-                  value={p.startDate}
-                  onChange={(e) => field("startDate", e.target.value)}
-                />
-              </label>
-            )}
-            {!editing && (
-              <label className="p-check">
-                <input
-                  type="checkbox"
-                  checked={startConfirmed}
-                  onChange={(e) => setStartConfirmed(e.target.checked)}
-                />
-                Jeg vælger {p.startDate} som dag 1 i mit 100-dages forløb.
-              </label>
-            )}
-            <p className="p-note">
-              Dit køb og din startdato er adskilt. Du har 100 aktive
-              kalenderdage fra startdatoen. Dag 101 får du et afsluttende
-              overblik; der sker ingen ny betaling.
-            </p>
-          </>
-        )}
-        {planPreview && (
-          <section className="p-card">
-            <h2>Forhåndsvisning</h2>
-            <p>{planPreview.explanation}</p>
-            <p>
-              {planPreview.changes.length} fremtidige pas ændres. Eksisterende
-              sæt bevares.
-            </p>
-            <details>
-              <summary>Se berørte datoer og øvelser</summary>
-              {planPreview.changes.map((c: any) => (
-                <div key={c.id}>
-                  <h3>{c.date}</h3>
-                  <p>
-                    {c.before.title} · {c.before.minutes} min. → {c.after.title}{" "}
-                    · {c.after.locationName} · {c.after.minutes} min.
-                  </p>
-                  <p>{c.after.exercises.map((e: any) => e.name).join(" · ")}</p>
-                </div>
-              ))}
-            </details>
-          </section>
-        )}
-        {error && (
-          <p className="p-error" role="alert">
-            {error}
-          </p>
-        )}
-        <div className="p-actions">
-          {step > 0 && (
-            <button
-              className="p-secondary"
-              disabled={busy}
-              onClick={() => setStep(step - 1)}
-            >
-              Tilbage
-            </button>
-          )}
-          <button
-            className="p-button"
-            disabled={busy || (step === 3 && !startConfirmed)}
-            onClick={() => save(Math.min(3, step + 1), step === 3)}
-          >
-            {busy
-              ? "Gemmer…"
-              : step === 3
-                ? editing
-                  ? planPreview
-                    ? "Bekræft ændringer"
-                    : "Se ændringer før du gemmer"
-                  : "Start mit 100-dages forløb"
-                : "Gem og fortsæt →"}
-          </button>
-        </div>
-      </section>
-    </main>
-  );
+import {useEffect,useState} from 'react';
+import NumberInput from './forms/NumberInput';
+import GeneratedPlanReview from './GeneratedPlanReview';
+import {defaults,labels,energy,type Profile,localDate,normalizeProfile,weekdayNames} from '@/lib/profile';
+import {exercises} from '@/lib/training';
+import {activitySettings} from '@/lib/activity-settings';
+import {deficitLevels} from '@/lib/nutrition';
+import {intakeVersion} from '@/lib/ai/intake';
+import {onboardingRequest} from '@/lib/onboarding-request';
+import type {IntakeDraft} from '@/lib/ai/intake-draft';
+import TrainingSettings from './TrainingSettings';
+import FoodExclusions from './FoodExclusions';
+import {GoalQuestions,SafetyQuestions,PreferredExerciseQuestions,newAnswers,restoreAnswers,asDraft,stageError,type WizardAnswers} from './PersonalizationSteps';
+const titles=['Dit mål','Din uge','Skader','Din mad','Din plan'],storedSteps=[0,1,1,4,7];
+export default function Onboarding({initial,initialStep=0,initialVersion=1,editing=false}:{initial:Profile;initialStep?:number;initialVersion?:number;editing?:boolean}){
+ const[p,setP]=useState<Profile>({...defaults,...initial,...activitySettings(initial),energyMethod:'weekly-v3',surplusKcal:initial.surplusKcal||250,everydayActivity:initial.everydayActivity,personalizationVersion:intakeVersion});
+ const[step,setStep]=useState(initialStep>=7?4:initialStep>=4?3:initialStep>=1?1:0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[startConfirmed,setStartConfirmed]=useState(editing);
+ const[answers,setAnswers]=useState<WizardAnswers>(()=>newAnswers(initial)),[intakeLoaded,setIntakeLoaded]=useState(false),[intakeLoading,setIntakeLoading]=useState(false),[intakeLoadError,setIntakeLoadError]=useState('');
+ useEffect(()=>{setError('');},[p,answers]);
+ useEffect(()=>{document.querySelector('.onboard-shell')?.scrollIntoView({block:'start'});},[step]);
+ async function loadSavedIntake(active:()=>boolean=()=>true){setIntakeLoading(true);setIntakeLoadError('');try{const d=await onboardingRequest<{draft:IntakeDraft|null}>('/api/ai/intake',{cache:'no-store'});if(!active())return;if(d.draft)setAnswers(a=>restoreAnswers(a,d.draft!));setIntakeLoaded(true);}catch{if(active())setIntakeLoadError('Kunne ikke hente dine gemte svar. Kontrollér forbindelsen, og prøv igen. Vi har ikke ændret din plan.');}finally{if(active())setIntakeLoading(false);}}
+ useEffect(()=>{let alive=true;void loadSavedIntake(()=>alive);return()=>{alive=false;};},[]);
+ useEffect(()=>{if(intakeLoaded||intakeLoading||!intakeLoadError)return;const recover=()=>{void loadSavedIntake();};window.addEventListener('online',recover);return()=>window.removeEventListener('online',recover);},[intakeLoaded,intakeLoading,intakeLoadError]);
+ async function persistIntake(includeSafety:boolean){await onboardingRequest<{ok:boolean}>('/api/ai/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(asDraft(answers,includeSafety))});}
+ function field<K extends keyof Profile>(k:K,v:Profile[K]){setP(x=>({...x,...(k==='nutrition'&&v==='calculated'?{activity:x.activity||'moderate',energyMethod:'weekly-v3' as const}:{}),[k]:v}));}
+ async function save(next:number){
+  const invalid=Array.from(document.querySelectorAll<HTMLInputElement>('main.onboarding input')).find(el=>!el.checkValidity());if(invalid){invalid.reportValidity();invalid.focus();return;}
+  if(step===3&&p.nutrition==='calculated'&&!p.everydayActivity){setError('Vælg hvor aktiv du er i hverdagen.');return;}
+  setBusy(true);setError('');try{if(!intakeLoaded)throw Error('Vent mens dine svar indlæses.');const problem=stageError(step,answers)||(step>=3?stageError(2,answers):null);if(problem)throw Error(problem);
+   if([0,2,3].includes(step))await persistIntake(step>=2);
+   if(!editing)await onboardingRequest('/api/platform/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p,step:storedSteps[next]})});
+   setStep(next);
+  }catch(e){setError(e instanceof Error?e.message:'Kunne ikke gemme. Dine valg er bevaret.');}finally{setBusy(false);}
+ }
+ function choices<K extends keyof Profile>(key:K,options:Profile[K][],names?:string[]){return <div className="p-choices">{options.map((v,i)=><button type="button" key={String(v)} aria-pressed={p[key]===v} className={p[key]===v?'chosen':''} onClick={()=>field(key,v)}>{names?.[i]||labels[String(v)]||String(v)}</button>)}</div>;}
+ const calculation=energy(p),normal=normalizeProfile(p);
+ return <main className="portal onboarding" data-profile-version={initialVersion} data-intake-loaded={intakeLoaded}>
+ <header className="p-top onboard-topbar"><a className="logo" href="/">SHAZ</a><strong className="onboard-header-title">{editing?'Tilpas plan':'Opret din plan'}</strong><a className="onboard-back-link" href="/app">Til mit forløb</a></header>
+ <section className="onboard-shell"><div className="onboard-progress"><span>{editing?'TILPAS DIN PLAN':'DIT UDGANGSPUNKT'}</span><span>{step===4?'OPSUMMERING':`DEL ${step+1} AF 4`}</span></div><div className="p-track"><i style={{width:`${((step+1)/5)*100}%`}}/></div><h1>{editing?'Tilpas din plan':titles[step]}</h1>{editing&&<h2 className="onboard-step-heading">{titles[step]}</h2>}<p className="p-muted">{editing?'Vi gemmer dine svar som kladde. Den aktive plan ændres først, når du bekræfter. Din historik bevares.':'Svarene gemmes, når du fortsætter. Du kan ændre dine valg senere.'}</p>
+ {!intakeLoaded&&<section className="p-card onboard-loading" role="status"><p>{intakeLoadError||'Henter dine gemte svar…'}</p>{intakeLoadError&&<button type="button" className="p-secondary" disabled={intakeLoading} onClick={()=>void loadSavedIntake()}>Prøv igen</button>}</section>}
+ {intakeLoaded&&<>
+ {step===0&&<GoalQuestions currentWeight={p.weight} value={answers} onChange={setAnswers} onProfileGoal={(goal,level)=>setP(x=>({...x,goal,...(level?{level}:{})}))}/>}
+ {step===1&&<><TrainingSettings value={p} onChange={setP}/><PreferredExerciseQuestions value={answers} onChange={setAnswers}/><details className="onboard-disclosure"><summary>Øvelser jeg helst vil undgå ({p.exerciseAvoid?.length||0} valgt)</summary><p className="p-note">Smerter og skader kommer i næste trin. Her vælger du kun efter præference.</p>{exercises.map(e=><label key={e.id} className="p-check"><input type="checkbox" checked={(p.exerciseAvoid||[]).includes(e.id)} onChange={ev=>field('exerciseAvoid',ev.target.checked?[...(p.exerciseAvoid||[]),e.id]:(p.exerciseAvoid||[]).filter(x=>x!==e.id))}/>{e.name}</label>)}</details></>}
+ {step===2&&<SafetyQuestions value={answers} onChange={setAnswers}/>}
+ {step===3&&<><h2>Hvordan spiser du?</h2>{choices('diet',['all','vegetarian','vegan','pescatarian'])}<label className="p-check"><input type="checkbox" checked={p.halal||p.diet==='halal'} onChange={e=>field('halal',e.target.checked)}/>Halal-egnede ingredienser</label>
+ <div className="p-fields"><label>Måltider pr. dag<select value={p.mealCount||4} onChange={e=>setP(x=>({...x,mealCount:Number(e.target.value),mealNames:undefined,mealTimes:undefined}))}>{[2,3,4,5,6].map(n=><option key={n} value={n}>{n} måltider</option>)}</select></label><label>Tid til madlavning<select value={p.cookTime} onChange={e=>field('cookTime',Number(e.target.value)as Profile['cookTime'])}>{[15,30,60].map(n=><option key={n} value={n}>Op til {n} minutter</option>)}</select></label></div>
+ <FoodExclusions value={p.avoid} onChange={avoid=>field('avoid',avoid)}/><h2>Hvordan vil du følge kosten?</h2>{choices('nutrition',['portions','calculated'],['Portioner – uden at tælle kalorier','Et beregnet kaloriemål'])}
+ {p.nutrition==='portions'?<p className="p-note">Du får opskrifter, portionsforslag og indkøbsliste. Du behøver ikke oplyse vægt eller tælle kalorier.</p>:<><div className="p-fields">{(['age','height','weight']as const).map((k,i)=><label key={k}>{['Alder (år)','Højde (cm)','Vægt (kg)'][i]}<NumberInput min={k==='age'?18:k==='height'?130:40} max={k==='age'?64:k==='height'?220:250} step={k==='weight'?0.1:1} value={p[k]} onValue={value=>field(k,value)}/></label>)}</div>
+ <label>Køn til kalorieberegningen<select value={p.sex||''} onChange={e=>field('sex',e.target.value as Profile['sex'])}><option value="">Vælg</option><option value="female">Kvinde</option><option value="male">Mand</option></select></label><p className="p-note">Formlen bruger disse to kategorier. Vælg portioner, hvis beregningen ikke passer til dig.</p>
+ <label>Hvor aktiv er du uden for træningen?<select value={p.everydayActivity||''} onChange={e=>setP(x=>({...x,everydayActivity:e.target.value as Profile['everydayActivity'],activity:'moderate',calculationSuitable:true,energyMethod:'weekly-v3'}))}><option value="">Vælg din hverdag</option><option value="seated">Mest siddende · studie eller kontor</option><option value="moving">En del på benene · stående/gående arbejde</option><option value="physical">Fysisk krævende arbejde</option></select></label><p className="p-note">Din valgte træningsuge lægges til separat. Et gammelt samlet aktivitetstal genbruges ikke.</p>
+ <label className="p-check"><input type="checkbox" checked={p.dataConsent||false} onChange={e=>field('dataConsent',e.target.checked)}/>Jeg giver samtykke til at gemme oplysningerne til kalorieberegningen. Jeg kan vælge portioner i stedet.</label>
+ {p.goal==='fat-loss'&&<label>Ønsket kalorieunderskud<select value={p.deficitLevel||'moderate'} onChange={e=>field('deficitLevel',e.target.value as Profile['deficitLevel'])}>{deficitLevels.map(l=><option key={l.id} value={l.id}>{l.name} · {l.percent}%</option>)}</select><small>Uegnede valg blokeres. Aggressivt er ikke standard og gives aldrig for alle 100 dage.</small></label>}
+ {p.goal==='muscle'&&<label>Kalorieoverskud til muskelopbygning<select value={p.surplusKcal||250} onChange={e=>field('surplusKcal',Number(e.target.value)as 150|250|350)}><option value={150}>Forsigtigt · +150 kcal</option><option value={250}>Udgangspunkt · +250 kcal</option><option value={350}>Større · +350 kcal</option></select><small>Startpunkt, ikke et krav for alle. Justér efter vægttrend og træningsudvikling.</small></label>}
+ {calculation&&<p className="p-notice">{calculation.available?`Estimeret ligevægt: ca. ${calculation.maintenance} kcal. Dit mål: ${calculation.kcal} kcal. Det er et startestimat, som bør vurderes efter 2–3 ugers registreringer.`:calculation.explanation}</p>}</>}
+ </>}
+ {step===4&&<><section className="p-card summary-card"><span className="p-eyebrow">DET BYGGER DIN PLAN PÅ</span><h2>{labels[p.goal]}</h2><p>{labels[p.level]} · {labels[p.diet]} · {p.mealCount||4} måltider om dagen</p><p className="p-note">{labels[p.nutrition]} · {p.days} styrkepas og {p.cardio?.days||0} konditionspas om ugen.</p></section>
+ <section className="p-card schedule-summary"><h2>Din uge</h2>{normal.schedule!.map(slot=><div className="p-list-row" key={slot.weekday}><span>{weekdayNames[slot.weekday]}</span><strong>{normal.locations!.find(l=>l.id===slot.locationId)?.name||labels[p.place]} · {slot.minutes} min.</strong></div>)}{(p.cardio?.weekdays||[]).map(d=><div className="p-list-row" key={'cardio'+d}><span>{weekdayNames[d]} · Kondition</span><strong>{p.cardio!.minutes} min.</strong></div>)}<p className="p-note">I alt {normal.schedule!.reduce((n,s)=>n+s.minutes,0)+(p.cardio?.days||0)*(p.cardio?.minutes||0)} minutter styrke og kondition om ugen. Anden sport tælles separat.</p></section>
+ {!editing&&<><label>Hvornår skal dag 1 begynde?<input type="date" min={localDate()} value={p.startDate} onChange={e=>field('startDate',e.target.value)}/></label><label className="p-check"><input type="checkbox" checked={startConfirmed} onChange={e=>setStartConfirmed(e.target.checked)}/>Jeg vælger {p.startDate} som dag 1 i mit 100-dages forløb.</label></>}
+ <GeneratedPlanReview profile={p} answers={answers} onChange={setAnswers} expectedVersion={initialVersion} startConfirmed={startConfirmed}/></>}
+ {error&&<p className="p-error" role="alert">{error}</p>}
+ <div className="p-actions">{step>0&&<button type="button" className="p-secondary" disabled={busy} onClick={()=>setStep(step-1)}>Tilbage</button>}{step<4&&<button type="button" className="p-button" disabled={busy||!intakeLoaded} onClick={()=>save(Math.min(4,step+1))}>{busy?'Gemmer…':'Gem og fortsæt →'}</button>}</div></>}
+ </section></main>;
 }

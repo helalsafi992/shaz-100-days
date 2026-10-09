@@ -169,40 +169,18 @@ export async function editCardio(
       if (!v.date || v.date < localDate() || v.date > addDays(p.start_date, 98))
         throw new HttpError(400, "Vælg en dato før afslutningsdagen.");
       await assertNoBreak(c, user, v.date);
-      const strength = await c.query(
-        "SELECT 1 FROM shaz_days WHERE user_id=$1 AND scheduled_date=$2 AND plan->>'kind'='workout' AND status<>'skipped'",
-        [user, v.date],
-      );
+      // No hidden maximum cardio duration or compulsory rest-day restriction.
+      // Coach review and clear load advice guide the customer; their chosen
+      // duration and chosen combination of strength/cardio are never reduced.
       const other = await c.query(
         "SELECT 1 FROM shaz_cardio WHERE user_id=$1 AND id<>$2 AND scheduled_date=$3 AND status IN ('planned','completed')",
         [user, v.id, v.date],
       );
-      if (
-        other.rowCount ||
-        (strength.rowCount &&
-          (p.data.cardio?.intensity !== "easy" || plan.selected.minutes > 20))
-      )
+      if (other.rowCount)
         throw new HttpError(
-          400,
-          "Den dag har allerede belastning, der ikke passer sammen med dette pas. Vælg en anden dag.",
+          409,
+          "Du har allerede et cardiopas på denne dato. Flyt det eksisterende pas først.",
         );
-      const dates = await c.query(
-        "SELECT scheduled_date::text AS date FROM shaz_days WHERE user_id=$1 AND plan->>'kind'='workout' AND status<>'skipped' UNION SELECT scheduled_date::text FROM shaz_cardio WHERE user_id=$1 AND id<>$2 AND status IN ('planned','completed')",
-        [user, v.id],
-      );
-      const active = new Set([...dates.rows.map((r) => r.date), v.date]);
-      for (let offset = -6; offset <= 0; offset++) {
-        const start = addDays(v.date, offset);
-        if (
-          Array.from({ length: 7 }, (_, i) => addDays(start, i)).every((d) =>
-            active.has(d),
-          )
-        )
-          throw new HttpError(
-            400,
-            "Flytningen fjerner den sidste restitutionsdag. Vælg en anden dato.",
-          );
-      }
       await c.query(
         "UPDATE shaz_cardio SET scheduled_date=$3,updated_at=now() WHERE id=$1 AND user_id=$2",
         [v.id, user, v.date],

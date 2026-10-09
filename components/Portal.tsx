@@ -1,4 +1,6 @@
 "use client";
+import ExerciseSwapButton from "./ExerciseSwapButton";
+import {replacementOptions} from "@/lib/exercise-replacements";
 import {
   SimpleNavigation,
   SimpleToday,
@@ -193,10 +195,10 @@ export default function Portal({
       <main className="p-main" id="customer-content">
         {state.reviewMode && (
           <details className="s-review">
-            <summary>Testkonto · indhold afventer godkendelse</summary>
+            <summary>Testkonto · demonstrationsmiljø</summary>
             <p>
               Dette er det isolerede testmiljø. Trænings- og ernæringsregler er
-              til gennemgang, og der er ikke registreret faglig godkendelse.
+              til afprøvning. Indholdet er ikke et individuelt sundhedsfagligt behandlingstilbud.
               Ingen rigtige betalinger.
             </p>
           </details>
@@ -564,6 +566,8 @@ function FoodLibrary({
         >
           <option value="all">Alle egnede</option>
           <option value="vegetarian">Vegetarisk</option>
+          <option value="vegan">Vegansk</option>
+          <option value="pescatarian">Pescetarisk</option>
           <option value="halal">Halal-egnet</option>
         </select>
         <button
@@ -948,14 +952,7 @@ function Workout({
                 [],
             )
             .filter((x) => x.length);
-          const options = alternatives(
-            e,
-            {
-              ...state.profile.data,
-              equipment: day.plan.equipment || state.profile.data.equipment,
-            },
-            state.exercises,
-          );
+          const options = replacementOptions(e, state.profile.data, state.exercises, day.plan);
           return (
             <section className="exercise-block" key={e.id}>
               <div className="p-section-head">
@@ -1089,37 +1086,12 @@ function Workout({
                 >
                   Pause · {e.rest} sek.
                 </button>
-                {options.length > 0 && day.status !== "completed" && (
-                  <select
-                    aria-label={"Byt " + e.name}
-                    value=""
-                    disabled={
-                      busy ||
-                      state.day > 100 ||
-                      day.scheduled_date < state.today
-                    }
-                    onChange={async (ev) => {
-                      const replacement = ev.target.value;
-                      if (
-                        replacement &&
-                        (await flush()) &&
-                        (await action("swap-exercise", {
-                          id: day.id,
-                          exercise: e.id,
-                          replacement,
-                        }))
-                      )
-                        close();
-                    }}
-                  >
-                    <option value="">Byt øvelse…</option>
-                    {options.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                {day.status !== "completed" && <ExerciseSwapButton exercise={e} options={options} disabled={busy||readonly} onSwap={async replacement=>{
+                  if(!(await flush()))throw Error("Dine sæt kunne ikke gemmes. Prøv igen før du skifter øvelse.");
+                  if(!(await action("swap-exercise",{id:day.id,exercise:e.id,replacement})))throw Error("Øvelsen kunne ikke skiftes.");
+                  close();
+                }}/>}
+
               </div>
             </section>
           );

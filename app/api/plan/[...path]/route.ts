@@ -108,6 +108,10 @@ export async function POST(
         days: await mealDays(s.user.id, v.start, v.count),
       });
     }
+    if(path === "training-confirm"){
+      const current=await profile(s.user.id);
+      if(current.data.personalizationVersion||input.data)throw new HttpError(403,"Send ændringerne til coachens godkendelse via Tilpas plan.");
+    }
     if (path === "training-preview" || path === "training-confirm")
       return Response.json(
         await trainingChange(
