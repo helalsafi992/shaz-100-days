@@ -57,6 +57,15 @@ export async function saveProfile(user: string, data: unknown, step: number) {
 export async function activate(user: string) {
   const old = await profile(user);
   const p = normalizeProfile(profileSchema.parse(old.data));
+  if (p.personalizationVersion) {
+    const { storedIntake } = await import("./ai/intake-store");
+    const { fullIntake } = await import("./ai/intake-draft");
+    const { screenIntake } = await import("./ai/intake");
+    const draft = await storedIntake(user);
+    if (!draft?.safety) throw new HttpError(409, "Udfyld sikkerhedsspørgsmålene før du starter.");
+    if (!screenIntake(fullIntake(p, draft)).automaticPlanAllowed)
+      throw new HttpError(409, "Der kræves individuel faglig vurdering før automatisk programstart.");
+  }
   validatePlanProfile(p);
   if (p.startDate < localDate() || p.startDate > addDays(localDate(), 90))
     throw new HttpError(
