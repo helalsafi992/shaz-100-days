@@ -6,16 +6,21 @@ import {
 } from "node:crypto";
 import { db, schema } from "./db";
 import { HttpError } from "./errors";
+import { requestOriginCheck } from "./request-origin";
 export { HttpError } from "./errors";
 export const baseURL = () => process.env.APP_URL || "http://localhost:3100";
 export const hash = (v: string) => createHash("sha256").update(v).digest("hex");
 export const opaque = () => randomBytes(32).toString("base64url");
 export function sameOrigin(req: Request) {
-  if (req.headers.get("origin") !== new URL(baseURL()).origin)
+  const check = requestOriginCheck(req, baseURL());
+  if (!check.allowed) {
+    // Categories only: never log headers, credentials, cookies or personal data.
+    console.warn(JSON.stringify({ event: "origin_rejected", ...check }));
     throw new HttpError(
       403,
-      "Forespørgslen blev afvist. Genindlæs siden og prøv igen.",
+      "Forespørgslen blev afvist. Åbn SHAZ direkte i din browser og prøv igen.",
     );
+  }
 }
 export async function rate(key: string, max = 8, minutes = 15) {
   await schema();
