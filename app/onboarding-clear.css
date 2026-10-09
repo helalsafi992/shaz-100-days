@@ -15,4 +15,7 @@
 .portal.onboarding .onboard-disclosure>summary{min-height:44px;font-size:14px;line-height:1.5;font-weight:600;cursor:pointer;}
 .portal.onboarding .schedule-summary .p-list-row{gap:12px;line-height:1.5;flex-wrap:wrap;}
 .portal.onboarding .food-exclusions{margin:20px 0;}
+.portal.onboarding .summary-card{background:#fff;color:#213329;padding:20px;border:1px solid #dbe5d5;}
+.portal.onboarding .summary-card h2{color:#213329;font-size:23px;line-height:1.25;margin:10px 0;}
+.portal.onboarding .summary-card p{color:#4a604f;font-size:14px;line-height:1.5;margin:8px 0;}
 @media(max-width:480px){.portal.onboarding .goal-fields{grid-template-columns:minmax(0,1fr);}.portal.onboarding .schedule-summary .p-list-row strong{font-size:14px;}}
