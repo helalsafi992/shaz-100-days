@@ -122,19 +122,36 @@ export function SimpleNavigation({ view }: { view: string }) {
         <Link href="/app" className="s-logo" aria-label="SHAZ – I dag">
           SHAZ<span>DIT FORLØB</span>
         </Link>
-        <Link
-          href="/app/profile"
-          className="s-profile"
-          aria-label="Profil og indstillinger"
-        >
-          <Icon name="user" />
-        </Link>
+        <div className="s-header-actions">
+          <Link
+            href="/onboarding?edit=1"
+            className="s-edit-plan"
+            aria-label="Tilpas min trænings- og madplan"
+          >
+            <Icon name="settings" size={16} />
+            <span>Tilpas plan</span>
+          </Link>
+          <Link
+            href="/app/profile"
+            className="s-profile"
+            aria-label="Profil og indstillinger"
+          >
+            <Icon name="user" />
+          </Link>
+        </div>
       </header>
       <aside className="s-sidebar">
         <Link href="/app" className="s-logo">
           SHAZ<span>100 DAGE. DIN HVERDAG.</span>
         </Link>
         <nav aria-label="Hovednavigation">{links}</nav>
+        <div className="s-sidebar-quick">
+          <Link href="/onboarding?edit=1" className="s-edit-plan">
+            <Icon name="settings" size={18} />
+            <span>Tilpas plan</span>
+            <Icon name="arrow" size={16} />
+          </Link>
+        </div>
         <div className="s-sidebar-bottom">
           <Link href="/app/profile">
             <Icon name="settings" />
