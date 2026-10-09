@@ -28,7 +28,7 @@ test('Owner-review questionnaire is unique, ordered, and never displayed as an a
  assert.deepEqual(questionnaireContractIssues(),[]);
  const all=questionnaire.groups.flatMap(g=>(g.items as readonly {id:string}[]).map(item=>({id:item.id})));
  assert.ok(all.length>=38);
- for(const id of ['goal_main','training_place','equipment_home','equipment_gym','strength_days','strength_weekdays','session_schedule','injury_status','injury_triggers','diet_pattern','nutrition_method','deficit','ai_consent']) assert.ok(all.some(q=>q.id===id),id);
+ for(const id of ['age_band','sleep','goal_main','training_place','equipment_home','equipment_gym','strength_days','strength_weekdays','session_schedule','injury_status','injury_triggers','diet_pattern','nutrition_method','deficit','ai_consent']) assert.ok(all.some(q=>q.id===id),id);
  const initial=visibleQuestions({});
  for(const id of ['equipment_home','equipment_gym','session_schedule','injury_area','deficit']) assert.ok(!initial.some(q=>q.id===id),id);
 });
@@ -47,3 +47,5 @@ test('Conditional questions disclose exactly the relevant exercise, injury and c
  assert.ok(!ids({nutrition_method:'portions',goal_main:'fat-loss'}).includes('deficit'));
  assert.ok(!ids({nutrition_method:'calculated',goal_main:'hypertrophy'}).includes('deficit'));
 });
+
+test('intake refuses a diet requested only in AI while the persistent profile uses another filter',()=>{const v=sample();v.dietPattern='vegan';assert.throws(()=>intakeSchema.parse(v));v.profile.diet='vegan';assert.ok(intakeSchema.parse(v));});
