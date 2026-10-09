@@ -59,3 +59,11 @@ Commit `8f038c68bdf62a3ddd48ed7f235ac8b4dc1c1527`:
 - Offline træningskladde overlever lukning, refresh, genforbindelse og øvelsesbytte. Et forsinket svar fra en lukket editor kan ikke overskrive en nyere lokal ændring.
 - Lokal databaseforbindelse blev faktisk afbrudt og genetableret. Appen returnerede 503 på health og 500 på signeret webhook under fejlen; samme webhook kunne genbehandles to gange med én lagret hændelse og én korrekt ordreændring. Kundens øvrige data var bevaret. Dette er lokal fejlindsprøjtning, ikke en afbrydelse af Railway-databasen.
 - Den nye leverances Railway-commit og deploy-status skal verificeres efter udrulningen; ovenstående versionsnumre gælder tidligere verificerede deployments.
+
+## f42eea3 i testmiljøet
+
+- Testdeployment `ef9ddc07-6616-4756-90d9-ac41f2671969`: SUCCESS. Health viste `f42eea3cbacb323d530f554e5ce02031d1b3485d`.
+- Frisk password-login, 100 dage, anonym afvisning, logout og ny session afprøvet. Ejerprofil og eksisterende maddage var uændrede.
+- Serverpreview for 2/3/4/5/6 måltider bevarede målet 2635 kcal. Planernes beregnede totaler var 2639/2632/2635/2658/2640 kcal, med tre forskellige forslag pr. plads og praktisk afrunding.
+- Browserkontrollen fandt en ældre UI-fejl: beregnerens standardfelter erstattede den gemte faktor 1,6 med 1,55. Ingen ændring blev bekræftet på ejertestkontoen. Derfor blev f42eea3 ikke fremført til produktion alene.
+- Rettelsen genbruger aktivitetsindstillingerne, indtil kunden aktivt vælger en ny vurdering. Den samme komponent bruges i onboarding og madberegneren. De efterfølgende 21 domænegrupper og 35 integrationstestgrupper består, inklusive alle fem måltidsantal gennem browseren, bevaret mål efter bekræftelse og den præcise 160/102/0-proteinvisning.

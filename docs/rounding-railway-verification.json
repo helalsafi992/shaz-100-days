@@ -1,0 +1,49 @@
+{
+  "commit": "f42eea3cbacb323d530f554e5ce02031d1b3485d",
+  "environment": "Railway isolated staging",
+  "ordinaryPasswordLogin": true,
+  "anonymousDenied": true,
+  "days": 100,
+  "previews": [
+    {
+      "meals": 2,
+      "target": 2635,
+      "plannedKcal": 2639,
+      "threeOptions": true,
+      "practicalPortions": true
+    },
+    {
+      "meals": 3,
+      "target": 2635,
+      "plannedKcal": 2632,
+      "threeOptions": true,
+      "practicalPortions": true
+    },
+    {
+      "meals": 4,
+      "target": 2635,
+      "plannedKcal": 2635,
+      "threeOptions": true,
+      "practicalPortions": true
+    },
+    {
+      "meals": 5,
+      "target": 2635,
+      "plannedKcal": 2658,
+      "threeOptions": true,
+      "practicalPortions": true
+    },
+    {
+      "meals": 6,
+      "target": 2635,
+      "plannedKcal": 2640,
+      "threeOptions": true,
+      "practicalPortions": true
+    }
+  ],
+  "logoutDenied": true,
+  "secondSessionPersisted": true,
+  "ownerProfileUnchanged": true,
+  "storedMealsUnchanged": true,
+  "profileHash": "e8884feb2fa4d18366ba8af6682a22784c4216fe9a4fb518964c21d3724367b3"
+}

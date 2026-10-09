@@ -17,6 +17,42 @@ import { activityForDate, activityCounts } from "../lib/activity";
 import { shoppingGroups, displayMass } from "../lib/shopping";
 import { batchPlan } from "../lib/meal-batch";
 import { nutritionRule } from "../lib/nutrition";
+import { estimate } from "../lib/nutrition";
+import { activitySettings } from "../lib/activity-settings";
+
+test("M01/N03 opening settings and changing meal count preserve legacy activity assumptions", () => {
+  for (const activity of ["low", "moderate", "high"] as const) {
+    const original = {
+      ...defaults,
+      nutrition: "calculated" as const,
+      goal: "maintain" as const,
+      age: 30,
+      height: 180,
+      weight: 85,
+      sex: "male" as const,
+      activity,
+      calculationSuitable: true,
+      dataConsent: true,
+    };
+    const before = estimate(original);
+    assert.ok(before.available);
+    for (const mealCount of [2, 3, 4, 5, 6]) {
+      const edited = { ...original, ...activitySettings(original), mealCount };
+      const after = estimate(edited);
+      assert.ok(after.available);
+      assert.equal(after.target, before.target);
+      assert.equal(after.factor, before.factor);
+      assert.equal(edited.everydayActivity, undefined);
+      assert.equal(edited.trainingActivity, undefined);
+    }
+  }
+  const modern = {
+    activity: "moderate" as const,
+    everydayActivity: "seated" as const,
+    trainingActivity: "light" as const,
+  };
+  assert.deepEqual(activitySettings(modern), modern);
+});
 
 export const hybrid: Profile = {
   ...defaults,

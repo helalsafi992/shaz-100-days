@@ -5,8 +5,8 @@ Denne rapport erstatter ikke masterkravene. Status er **ikke samlet 41/41 bestå
 ## Reproducerbar evidens
 
 - `npm run typecheck`, `npm test`, `npm run build`, `npm run test:integration`.
-- `tests/domain.test.ts`, `tests/master.test.ts`, `tests/activity.test.ts`: 20 testgrupper; herunder 9.801 måltidskombinationer, indkøbsgrupper og batchallokering.
-- `scripts/integration.mts`: 34 beståede grupper, isoleret PostgreSQL/PGlite, almindelig Better Auth, serverejerskab, signerede betalingsfixtures, samtidige ændringer, fysisk database-snapshot/restore, appgenstart og Chromium-browser.
+- `tests/domain.test.ts`, `tests/master.test.ts`, `tests/activity.test.ts`: 21 testgrupper; herunder 9.801 måltidskombinationer, indkøbsgrupper og batchallokering.
+- `scripts/integration.mts`: 35 beståede grupper, isoleret PostgreSQL/PGlite, almindelig Better Auth, serverejerskab, signerede betalingsfixtures, samtidige ændringer, fysisk database-snapshot/restore, appgenstart og Chromium-browser.
 - Browserbredder: 320, 390, 430, 768 og 1440 CSS-px. Mobil er emuleret Chromium, ikke fysisk Safari/Android.
 - `docs/master-test-results.json`: tidsstemplet maskinresultat fra seneste fulde kørsel.
 - Railway-commit og deployet browserkontrol dokumenteres særskilt i `docs/MASTER-DEPLOYMENT.md`.
@@ -39,13 +39,13 @@ Denne rapport erstatter ikke masterkravene. Status er **ikke samlet 41/41 bestå
 | N01 | `targetFromMaintenance`, domænetest | Lokalt bestået: 2400 → 2160 / 2040 / 1920 / 1800. |
 | N02 | `estimate`, serverguard, integration | Lokalt bestået for testpolitikken: uegnede profiler og udløbet aggressiv periode afvises. Faglig godkendelse mangler. |
 | N03 | aktivitetsmodel, cardiologtest | Lokalt bestået: cardio-log ændrer ikke energimål eller tilføjer forbrænding. |
-| M01 | `makeMealDay`, preview/confirm | Lokalt bestået: 2–6 måltider omfordeler samme dagsmål. |
+| M01 | `makeMealDay`, preview/confirm | Lokalt bestået: 2–6 måltider omfordeler samme dagsmål, også gennem den faktiske browserformular på en ældre profil. Åbning af beregner eller træningsindstillinger ændrer ikke gemte aktivitetsfaktorer. |
 | M02 | 9.801 kombinationer | Delvis: testprofilernes energi/protein/fedt/fibre består. Mikronæringsstoffer er ukendte og ikke godkendt som fuld tilstrækkelighed. |
 | M03 | `suitable`, master- og API-tests | Lokalt bestået: vegetarisk + halal + fravalg; serveren afviser uegnede retter. |
 | M04 | `editMeal`, integration/browser | Lokalt bestået: fjern, tom plads, fortryd, portioner, totaler og indkøb. Målet sænkes ikke. |
 | M05 | eksplicit byttebekræftelse, browser | Lokalt testet: valg B efterfulgt af Escape må ikke ændre gemte måltider. GET opretter ikke madplaner. |
 | M06 | låste slots, versionsbundet ernæringspreview | Lokalt bestået: spiste snapshots bevares; stale preview giver konflikt. |
-| M07 | separate labels i `FoodPlanner` | Implementeret: planlagt/minimum/spist er adskilt; planlagt protein over minimum er ikke fejl. Numerisk specifik 160/102/0-browserfixture mangler. |
+| M07 | separate labels i `FoodPlanner` | Implementeret: planlagt/minimum/spist er adskilt; planlagt protein over minimum er ikke fejl. Den præcise 160/102/0-visning er testet i mobilbrowser med en tydeligt afgrænset syntetisk UI-fixture i den midlertidige database; ingen falsk proteinunderskudsbesked. |
 | M08 | `householdSize`, `mealShopping`, `mealBatch`, mastertest | Delvis: to personer fordobler indkøb, ikke personlig energi. To sammenkædede måltider tilberedes én gang og indkøbes på madlavningsdatoen. Preview er versionsbundet, spist historik låses; fremtidige rester kan frigøres uden at omskrive historik. Browser på 390 px har gennemført preview, bekræftelse, refresh og efterfølgende indkøb. Nye portioner bruger dokumenterede 1/5/50 g-trin, og næringsværdier beregnes fra de afrundede ingredienser. Gamle gemte alternativer og fortrydelse bevarer deres snapshots. |
 | M09 | opskriftsfiltre/portionsgrænser | Delvis: utilstrækkelige muligheder og totalafvigelse vises; ingen dubletter/allergibrud. Ingrediensspecifik afrunding og opskriftsgrænser er implementeret og testet; faglig gennemgang af disse grænser mangler. |
 | M10 | indkøbsinterval, varegrupper og `checked_grams` | Implementeret: 1–14 dage, grupperede varer og øget behov ophæver visuel afkrydsning. Gram/kg omregnes præcist, ikke via antagede styk-/ml-vægte. Mobilbrowser: afkrydsning gemmes efter refresh; skift fra 7 til 14 dage viser øget behov uden forkert afkrydsning. |

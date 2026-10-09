@@ -2204,13 +2204,62 @@ try {
         fullPage: false,
       });
       await page.goto(env.APP_URL + "/app/food");
+      const settingsBefore = await (
+        await context.request.get(env.APP_URL + "/api/plan/state")
+      ).json();
+      const preservedTarget = settingsBefore.days.find(
+        (d: any) => d.date === today,
+      ).data.target;
+      assert.ok(preservedTarget > 0);
       await page.getByRole("button", { name: "Beregn & tilpas" }).click();
-      await page.getByLabel("Måltider om dagen").selectOption("3");
-      await page.getByRole("button", { name: "Se nye portioner" }).click();
+      await page
+        .getByRole("button", { name: "Opdatér aktivitetsvurdering" })
+        .waitFor();
+      for (const count of [2, 4, 5, 6, 3]) {
+        await page.getByLabel("Måltider om dagen").selectOption(String(count));
+        const reply = page.waitForResponse(
+          (r) =>
+            r.url().endsWith("/api/plan/nutrition-preview") &&
+            r.request().method() === "POST",
+        );
+        await page.getByRole("button", { name: "Se nye portioner" }).click();
+        const response = await reply;
+        assert.equal(response.status(), 200);
+        const preview = await response.json();
+        assert.equal(
+          preview.day.target,
+          preservedTarget,
+          "Changing meal count through the real form must preserve the saved calorie target",
+        );
+        assert.equal(preview.day.slots.length, count);
+        await page
+          .getByRole("button", { name: "Bekræft og gem ændringen" })
+          .waitFor();
+        assert.ok(
+          (await page.locator(".preview-card").textContent())?.includes(
+            `Mål: ${preservedTarget}`,
+          ),
+        );
+      }
       await page
         .getByRole("button", { name: "Bekræft og gem ændringen" })
         .click();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
+      const settingsAfter = await (
+        await context.request.get(env.APP_URL + "/api/plan/state")
+      ).json();
+      assert.equal(
+        settingsAfter.days.find((d: any) => d.date === today).data.target,
+        preservedTarget,
+      );
+      assert.equal(
+        settingsAfter.profile.data.everydayActivity,
+        settingsBefore.profile.data.everydayActivity,
+      );
+      assert.equal(
+        settingsAfter.profile.data.trainingActivity,
+        settingsBefore.profile.data.trainingActivity,
+      );
       await page
         .getByRole("button", { name: "Byt · 3 forslag" })
         .first()
@@ -2758,6 +2807,62 @@ try {
       assert.deepEqual(released[0].data, historical[0].data);
       assert.equal(released[1].data.slots[0].selected, null);
       assert.equal(released[1].data.target, historical[1].data.target);
+    },
+  );
+  await check(
+    "M07: explicit presentation fixture shows planned protein 160, minimum 102 and eaten 0 without a false deficit",
+    async () => {
+      // UI-only synthetic values in the disposable database, never customer food data.
+      const original = (
+        await db().query(
+          "SELECT data FROM shaz_meal_days WHERE user_id=$1 AND date=$2",
+          [pauseFixture.id, today],
+        )
+      ).rows[0].data;
+      const fixture = structuredClone(original);
+      fixture.proteinTarget = 102;
+      const selected = fixture.slots.filter((s: any) => s.selected);
+      assert.ok(selected.length > 0);
+      for (const slot of fixture.slots) {
+        slot.status = "planned";
+        if (slot.selected) slot.selected.totals.protein = 160 / selected.length;
+      }
+      const context = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      try {
+        await db().query(
+          "UPDATE shaz_meal_days SET data=$3 WHERE user_id=$1 AND date=$2",
+          [pauseFixture.id, today, JSON.stringify(fixture)],
+        );
+        const page = await context.newPage();
+        await page.goto(env.APP_URL + "/login");
+        await page
+          .getByLabel("E-mail", { exact: true })
+          .fill(pauseFixture.email);
+        await page
+          .getByLabel("Adgangskode", { exact: true })
+          .fill(pauseFixture.password);
+        await page
+          .getByRole("button", { name: "Log ind", exact: true })
+          .click();
+        await page.waitForURL("**/app");
+        await page.goto(env.APP_URL + "/app/food");
+        await page.locator(".daily-nutrition").waitFor();
+        const card = await page.locator(".daily-nutrition").innerText();
+        assert.match(card, /Planlagt protein\s*160\s*g/);
+        assert.match(card, /Minimumsmål: 102 g/);
+        assert.match(card, /Registreret som spist: 0 kcal\s*· 0 g protein/);
+        assert.ok(!card.includes("når ikke proteinmålet"));
+      } finally {
+        await context.close();
+        await db().query(
+          "UPDATE shaz_meal_days SET data=$3 WHERE user_id=$1 AND date=$2",
+          [pauseFixture.id, today, JSON.stringify(original)],
+        );
+      }
     },
   );
   await check(

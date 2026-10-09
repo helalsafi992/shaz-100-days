@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T23:54:25.161Z",
+  "at": "2026-10-09T00:06:36.888Z",
   "database": "Isolated PGlite PostgreSQL via wire protocol",
   "payment": "Signed local Stripe fixtures; no actual Stripe test account calls",
   "email": "Encrypted local mail capture; no actual mailbox delivery",
@@ -134,6 +134,10 @@
     },
     {
       "name": "M08/M10: batch preview, atomic linked portions, cooking-date shopping, history locks and cross-user denial",
+      "status": "passed"
+    },
+    {
+      "name": "M07: explicit presentation fixture shows planned protein 160, minimum 102 and eaten 0 without a false deficit",
       "status": "passed"
     },
     {

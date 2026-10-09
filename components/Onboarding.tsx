@@ -10,6 +10,8 @@ import {
 import { exercises } from "@/lib/training";
 import { ingredients } from "@/lib/recipes";
 import TrainingSettings from "./TrainingSettings";
+import ActivitySettings from "./ActivitySettings";
+import { activitySettings } from "@/lib/activity-settings";
 import { deficitLevels } from "@/lib/nutrition";
 const titles = [
   "Mål og udgangspunkt.",
@@ -30,8 +32,7 @@ export default function Onboarding({
   const [p, setP] = useState<Profile>({
       ...defaults,
       ...initial,
-      everydayActivity: initial.everydayActivity || "moving",
-      trainingActivity: initial.trainingActivity || "regular",
+      ...activitySettings(initial),
     }),
     [step, setStep] = useState(
       initialStep >= 7 ? 3 : initialStep >= 4 ? 2 : initialStep >= 1 ? 1 : 0,
@@ -47,9 +48,7 @@ export default function Onboarding({
       ...x,
       ...(k === "nutrition" && v === "calculated"
         ? {
-            activity: x.activity || "moderate",
-            everydayActivity: x.everydayActivity || "moving",
-            trainingActivity: x.trainingActivity || "regular",
+            ...activitySettings(x),
           }
         : {}),
       [k]: v,
@@ -343,44 +342,13 @@ export default function Onboarding({
                 Den oprindelige Mifflin–St Jeor-formel bruger to biologiske
                 kategorier. Vælg portioner, hvis den ikke passer til dig.
               </p>
-              <div className="form-grid">
-                <label>
-                  Hverdagsaktivitet
-                  <select
-                    value={p.everydayActivity || "moving"}
-                    onChange={(e) =>
-                      setP({
-                        ...p,
-                        activity: "moderate",
-                        everydayActivity: e.target
-                          .value as Profile["everydayActivity"],
-                      })
-                    }
-                  >
-                    <option value="seated">Mest siddende</option>
-                    <option value="moving">En del gang og bevægelse</option>
-                    <option value="physical">Fysisk aktiv hverdag</option>
-                  </select>
-                </label>
-                <label>
-                  Samlet træningsaktivitet
-                  <select
-                    value={p.trainingActivity || "regular"}
-                    onChange={(e) =>
-                      setP({
-                        ...p,
-                        activity: "moderate",
-                        trainingActivity: e.target
-                          .value as Profile["trainingActivity"],
-                      })
-                    }
-                  >
-                    <option value="light">Let</option>
-                    <option value="regular">Regelmæssig</option>
-                    <option value="heavy">Høj</option>
-                  </select>
-                </label>
-              </div>
+              <ActivitySettings
+                value={p}
+                onChange={(next) => {
+                  setP((x) => ({ ...x, ...next }));
+                  setPlanPreview(null);
+                }}
+              />
               <p className="p-note">
                 Mifflin–St Jeor og én aktivitetsfaktor for hverdag plus træning.
                 Vi lægger ikke træningens forbrænding oveni igen.

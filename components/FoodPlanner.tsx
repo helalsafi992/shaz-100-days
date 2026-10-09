@@ -16,6 +16,8 @@ import { estimate, deficitLevels } from "@/lib/nutrition";
 import { addDays, type Profile } from "@/lib/profile";
 import { shoppingGroups, displayMass } from "@/lib/shopping";
 import BatchMeal from "./BatchMeal";
+import ActivitySettings from "./ActivitySettings";
+import { activitySettings } from "@/lib/activity-settings";
 type Row = { date: string; data: MealDay; version: number };
 type State = {
   profile: { data: Profile; version: number; start_date: string };
@@ -220,9 +222,7 @@ export default function FoodPlanner({
     if (!p) return;
     setForm({
       ...p,
-      activity: p.activity || "moderate",
-      everydayActivity: p.everydayActivity || "moving",
-      trainingActivity: p.trainingActivity || "regular",
+      ...activitySettings(p),
       mealCount: p.mealCount || 4,
       mealNames:
         p.mealNames ||
@@ -747,43 +747,14 @@ export default function FoodPlanner({
                       <option value="female">Kvindelig koefficient</option>
                     </select>
                   </label>
-                  <label>
-                    Hverdagsaktivitet
-                    <select
-                      value={form.everydayActivity || "moving"}
-                      onChange={(ev) => {
-                        field("everydayActivity", ev.target.value);
-                        field("activity", "moderate");
-                      }}
-                    >
-                      <option value="seated">Mest siddende</option>
-                      <option value="moving">En del stående og gående</option>
-                      <option value="physical">
-                        Fysisk arbejde / meget bevægelse
-                      </option>
-                    </select>
-                  </label>
-                  <label>
-                    Samlet træningsaktivitet
-                    <select
-                      value={form.trainingActivity || "regular"}
-                      onChange={(ev) => {
-                        field("trainingActivity", ev.target.value);
-                        field("activity", "moderate");
-                      }}
-                    >
-                      <option value="light">
-                        Let · typisk under 150 min./uge
-                      </option>
-                      <option value="regular">
-                        Regelmæssig · typisk 150–300 min./uge
-                      </option>
-                      <option value="heavy">
-                        Høj · typisk over 300 min./uge
-                      </option>
-                    </select>
-                  </label>
                 </div>
+                <ActivitySettings
+                  value={form}
+                  onChange={(next) => {
+                    setForm((f) => ({ ...f!, ...next }));
+                    setPreview(null);
+                  }}
+                />
                 <label className="p-check">
                   <input
                     type="checkbox"
@@ -877,8 +848,9 @@ export default function FoodPlanner({
                     eller minus 161. Hvilestofskiftet ganges med én samlet
                     aktivitetsfaktor: hverdagsaktivitet 1,20 / 1,35 / 1,50 plus
                     træningsaktivitet 0,10 / 0,20 / 0,30. Det er foreløbige
-                    produktantagelser. Ingen ekstra kalorier lægges til efter
-                    cardio.
+                    produktantagelser. Ældre gemte samlede faktorer på 1,4 / 1,6
+                    / 1,8 bevares indtil et aktivt ændringsvalg. Ingen ekstra
+                    kalorier lægges til efter cardio.
                   </p>
                 </details>
               </>
