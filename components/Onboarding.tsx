@@ -169,7 +169,7 @@ export default function Onboarding({
           <span>{step === 4 ? "OPSUMMERING" : `DEL ${step + 1} AF 4`}</span>
         </div>
         <div className="p-track">
-          <i style={{ width: `${((step + 1) / 4) * 100}%` }} />
+          <i style={{ width: `${((step + 1) / 5) * 100}%` }} />
         </div>
         <h1>{titles[step]}</h1>
         <p className="p-muted">
@@ -199,7 +199,7 @@ export default function Onboarding({
             }}
           />
         )}
-        {step === 2 && (
+        {step === 3 && (
           <>
             <h2>Kostpræferencer</h2>
             {choices("diet", ["all", "vegetarian", "vegan", "pescatarian"])}
@@ -255,7 +255,7 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 2 && (
+        {step === 3 && (
           <>
             <h2>Din beregning</h2>
             {choices("nutrition", ["portions", "calculated"])}
@@ -322,7 +322,7 @@ export default function Onboarding({
             </p>
           </>
         )}
-        {step === 2 &&
+        {step === 3 &&
           (p.nutrition === "portions" ? (
             <div className="p-card">
               <span className="p-eyebrow">INGEN TAL PÅ KROPPEN KRÆVET</span>
@@ -431,7 +431,7 @@ export default function Onboarding({
             ))}
           </details>
         )}
-        {step === 3 && (
+        {step === 4 && (
           <>
             <div className="p-card summary-card">
               <span className="p-eyebrow">DET HER ER DIN PLAN</span>
@@ -533,12 +533,12 @@ export default function Onboarding({
           )}
           <button
             className="p-button"
-            disabled={busy || (step === 3 && !startConfirmed)}
-            onClick={() => save(Math.min(3, step + 1), step === 3)}
+            disabled={busy || (step === 4 && !startConfirmed)}
+            onClick={() => save(Math.min(4, step + 1), step === 4)}
           >
             {busy
               ? "Gemmer…"
-              : step === 3
+              : step === 4
                 ? editing
                   ? planPreview
                     ? "Bekræft ændringer"
