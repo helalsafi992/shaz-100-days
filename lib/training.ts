@@ -477,6 +477,10 @@ function choose(
       400,
       `Ingen egnet øvelse til ${pattern} på den valgte lokation. Tilføj egnet udstyr eller ændr dit frivillige øvelsesfravalg.`,
     );
+  // An explicitly preferred, eligible exercise wins within the same movement pattern.
+  // Equipment requirements and avoid-list filtering above are never overridden.
+  const favorites = options.filter((e) => (p.exercisePreferred || []).includes(e.id));
+  if (favorites.length) return favorites[index % favorites.length];
   const loaded = options.filter((e) => e.equipment[0] !== "bodyweight");
   const pool = loaded.length ? loaded : options;
   return pool[(p.level === "beginner" ? index : index + 1) % pool.length];
