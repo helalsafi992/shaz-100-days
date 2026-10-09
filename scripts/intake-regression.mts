@@ -21,6 +21,71 @@ try{
  server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p','3106','-H','0.0.0.0'],{env:{...env,NODE_ENV:'production'},stdio:['ignore','pipe','pipe']});let logs='';server.stdout?.on('data',b=>{logs+=String(b);});server.stderr?.on('data',b=>{logs+=String(b);});for(let i=0;i<100;i++){try{if((await fetch(env.APP_URL+'/api/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,200));if(i===99)throw Error('Next start failed: '+logs.slice(-600));}
  const{chromium}=await import('playwright-core');browser=await chromium.launch({executablePath:await browserPath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--no-zygote']});await mkdir('test-artifacts',{recursive:true});
  await check('Password login restores deep link and uses real profile version greater than one',async()=>{const context=await browser!.newContext({viewport:{width:390,height:844}}),page=await context.newPage();await page.goto(env.APP_URL+'/onboarding?edit=1');assert.match(page.url(),/returnTo=/);await page.getByLabel('E-mail',{exact:true}).fill(active.email);await page.getByLabel('Adgangskode',{exact:true}).fill(active.password);await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.waitForURL('**/onboarding?edit=1');assert.equal(await page.locator('main.onboarding').getAttribute('data-profile-version'),String((await profile(active.id)).version));await context.close();});
+ await check('Transient Safari Load failed retries without showing a raw error or losing the saved intake',async()=>{
+  const context=await browser!.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  try{
+   const cookies=active.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};});
+   await context.addCookies(cookies);
+   const page=await context.newPage();let requests=0;
+   await page.route('**/api/ai/intake',route=>{
+     if(route.request().method()!=='GET')return route.continue();
+     requests++;
+     if(requests<=2)return route.abort('internetdisconnected');
+     return route.continue();
+   });
+   await page.goto(env.APP_URL+'/onboarding?edit=1',{waitUntil:'domcontentloaded'});
+   await page.locator('main.onboarding[data-intake-loaded="true"]').waitFor({timeout:20000});
+   assert.equal(requests,3,'Initial two network failures should be retried automatically');
+   assert.equal(await page.getByText('Load failed',{exact:true}).count(),0);
+   assert.equal(await page.locator('.onboard-loading').count(),0);
+   assert.ok(await page.getByRole('heading',{name:'Tilpas din plan',exact:true}).isVisible());
+  }finally{await context.close();}
+ });
+ await check('Permanent iPhone network failure offers Try again, then resumes without resetting the active plan',async()=>{
+  const context=await browser!.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  try{
+   const cookies=active.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};});
+   await context.addCookies(cookies);
+   const page=await context.newPage();let attempts=0;
+   await page.route('**/api/ai/intake',route=>{
+     if(route.request().method()!=='GET')return route.continue();
+     attempts++;
+     if(attempts<=3)return route.abort('internetdisconnected');
+     return route.continue();
+   });
+   await page.goto(env.APP_URL+'/onboarding?edit=1',{waitUntil:'domcontentloaded'});
+   const retry=page.getByRole('button',{name:'Prøv igen',exact:true});
+   await retry.waitFor({timeout:20000});
+   assert.equal(await page.locator('main.onboarding').getAttribute('data-intake-loaded'),'false');
+   assert.equal(await page.getByRole('button',{name:'Gem og fortsæt →'}).count(),0,'Cannot edit before saved answers have loaded');
+   assert.match(await page.locator('.onboard-loading').innerText(),/Kunne ikke hente dine gemte svar/);
+   assert.equal(await page.getByText('Load failed',{exact:true}).count(),0);
+   await retry.click();
+   await page.locator('main.onboarding[data-intake-loaded="true"]').waitFor({timeout:20000});
+   assert.equal(attempts,4);
+   assert.equal((await profile(active.id)).start_date,today,'Loading a draft must never alter an active plan');
+  }finally{await context.close();}
+ });
+ await check('Tilpas plan is always in the mobile topbar and desktop sidebar, and edit mode is clearly labeled',async()=>{
+  for(const width of [320,390,1440]){
+   const context=await browser!.newContext({viewport:{width,height:width===1440?900:844}});
+   try{
+    const cookies=active.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};});
+    await context.addCookies(cookies);
+    const page=await context.newPage();
+    await page.goto(env.APP_URL+'/app',{waitUntil:'networkidle'});
+    const editLink=width===1440?page.locator('.s-sidebar .s-edit-plan'):page.locator('.s-mobile-header .s-edit-plan');
+    await editLink.waitFor({state:'visible'});
+    assert.match(await editLink.innerText(),/Tilpas plan/);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await editLink.click();
+    await page.waitForURL('**/onboarding?edit=1');
+    assert.ok(await page.getByRole('heading',{name:'Tilpas din plan',exact:true}).isVisible());
+    assert.ok(await page.locator('.onboard-header-title').isVisible());
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   }finally{await context.close();}
+  }
+ });
  await check('Canonical unit switching and no overflow at 320,390,1440px',async()=>{for(const width of [320,390,1440]){const context=await browser!.newContext({viewport:{width,height:width===1440?1000:844}});await context.addCookies(active.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(env.APP_URL+'/onboarding?edit=1',{waitUntil:'networkidle'});await page.getByRole('button',{name:'Vægt',exact:true}).click();await page.getByLabel('Din vægt nu (kg)',{exact:true}).fill('80');await page.getByLabel('Din ønskede vægt (kg)',{exact:true}).fill('72,5');await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('lbs');assert.match(await page.getByLabel('Din vægt nu (lbs)',{exact:true}).inputValue(),/^176/);await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('kg');assert.equal(await page.getByLabel('Din ønskede vægt (kg)',{exact:true}).inputValue(),'72,5');await page.getByRole('button',{name:'Løbedistance',exact:true}).click();await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('miles');await page.getByLabel('Så langt kan du løbe nu (miles)',{exact:true}).fill('2');await page.getByLabel('Så langt vil du kunne løbe (miles)',{exact:true}).fill('5');await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('km');assert.match(await page.getByLabel('Så langt vil du kunne løbe (km)',{exact:true}).inputValue(),/^8,05/);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);await page.screenshot({path:'test-artifacts/clear-goal-'+width+'.png',fullPage:true});await context.close();}});
  await check('Fictional 18-year-old completes five areas and activates a saved vegan plan',async()=>{const fresh=await customer('clear-novice'),context=await browser!.newContext({viewport:{width:390,height:844}});await context.addCookies(fresh.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(env.APP_URL+'/onboarding',{waitUntil:'networkidle'});await page.getByRole('button',{name:'18–39 år',exact:true}).click();await page.getByRole('button',{name:'Helt ny',exact:true}).click();await page.getByLabel('Jeg er mindst 18 år.',{exact:true}).check();await page.getByLabel(/Jeg accepterer, at SHAZ gemmer/).check();await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din uge',exact:true}).waitFor();await page.getByLabel('Styrkepas om ugen',{exact:true}).selectOption('2');await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Dine hensyn',exact:true}).waitFor();assert.equal(await page.locator('.compact-health > fieldset').count(),3);await page.getByRole('button',{name:'Nej, ingen af delene',exact:true}).first().click();await page.getByRole('button',{name:'Ingen gener',exact:true}).click();await page.getByRole('button',{name:'Nej, ingen af delene',exact:true}).last().click();
 // Reopening a group must not preserve the previous grouped No as a fresh answer.
