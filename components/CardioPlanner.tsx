@@ -202,7 +202,7 @@ export default function CardioPlanner({
             />
             <p className="p-note">
               Du bestemmer selv antal pas, dage og minutter. Cardio samme dag som styrke er muligt.
-              Shaz gennemgår den samlede belastning, inden en ny personlig plan sendes.
+              Du bestemmer selv dine cardiopas og kan ændre dem senere.
             </p>
             <button
               className="p-button"
