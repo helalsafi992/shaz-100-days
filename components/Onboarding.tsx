@@ -427,6 +427,7 @@ export default function Onboarding({
         )}
         {step === 4 && (
           <>
+            <ReviewAIQuestion value={answers} onChange={setAnswers} disabledReason="AI-vurdering er frivillig og kræver godkendt databehandling. Standardplanen fungerer uden AI." />
             <div className="p-card summary-card">
               <span className="p-eyebrow">DET HER ER DIN PLAN</span>
               <h2>
