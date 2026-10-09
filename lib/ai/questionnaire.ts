@@ -76,8 +76,8 @@ export const questionnaire = {
               "label": "Core"
             }
           ],
-          "required": true,
-          "hint": "Vælg højst to. Ikke et løfte om lokalt fedttab.",
+          "required": false,
+          "hint": "Frivilligt. Hele kroppen vælges som udgangspunkt, hvis du ikke prioriterer bestemte områder.",
           "maxChoices": 2
         },
         {
@@ -126,6 +126,28 @@ export const questionnaire = {
           ]
         },
         {
+          "id": "age_band",
+          "title": "Hvilken aldersgruppe er du i?",
+          "type": "single",
+          "path": "wishes.ageBand",
+          "choices": [
+            {
+              "value": "18-39",
+              "label": "18–39 år"
+            },
+            {
+              "value": "40-64",
+              "label": "40–64 år"
+            },
+            {
+              "value": "65-plus",
+              "label": "65 år eller ældre"
+            }
+          ],
+          "required": true,
+          "hint": "Denne version af automatisk personlig tilpasning er ikke godkendt til 65+."
+        },
+        {
           "id": "experience",
           "title": "Hvor erfaren er du med styrketræning?",
           "type": "single",
@@ -146,6 +168,31 @@ export const questionnaire = {
             {
               "value": "over-1-year",
               "label": "Over et år"
+            }
+          ],
+          "required": true
+        },
+        {
+          "id": "sleep",
+          "title": "Hvor meget sover du typisk?",
+          "type": "single",
+          "path": "wishes.sleep",
+          "choices": [
+            {
+              "value": "under-6",
+              "label": "Under 6 timer"
+            },
+            {
+              "value": "6-8",
+              "label": "6–8 timer"
+            },
+            {
+              "value": "over-8",
+              "label": "Over 8 timer"
+            },
+            {
+              "value": "variable",
+              "label": "Meget forskelligt"
             }
           ],
           "required": true
@@ -477,7 +524,7 @@ export const questionnaire = {
           "id": "other_sport",
           "title": "Dyrker du anden sport?",
           "type": "single",
-          "path": "wishes.otherSport",
+          "path": "ui.otherSportEnabled",
           "choices": [
             {
               "value": "no",
@@ -1030,7 +1077,7 @@ export const questionnaire = {
           "id": "measurements",
           "title": "Oplysninger til estimeret ligevægtsindtag",
           "type": "structured",
-          "path": "profile.estimatedCaloriesInputs",
+          "path": "profile",
           "choices": [],
           "required": true,
           "hint": "Alder, højde, vægt, beregningskategori, hverdagsaktivitet, træningsaktivitet og særskilt databehandlingssamtykke.",
