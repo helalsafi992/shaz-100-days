@@ -87,9 +87,9 @@ try{
   }
  });
  await check('Canonical unit switching and no overflow at 320,390,1440px',async()=>{for(const width of [320,390,1440]){const context=await browser!.newContext({viewport:{width,height:width===1440?1000:844}});await context.addCookies(active.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(env.APP_URL+'/onboarding?edit=1',{waitUntil:'networkidle'});await page.getByRole('button',{name:'Vægt',exact:true}).click();await page.getByLabel('Din vægt nu (kg)',{exact:true}).fill('80');await page.getByLabel('Din ønskede vægt (kg)',{exact:true}).fill('72,5');await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('lbs');assert.match(await page.getByLabel('Din vægt nu (lbs)',{exact:true}).inputValue(),/^176/);await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('kg');assert.equal(await page.getByLabel('Din ønskede vægt (kg)',{exact:true}).inputValue(),'72,5');await page.getByRole('button',{name:'Løbedistance',exact:true}).click();await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('miles');await page.getByLabel('Så langt kan du løbe nu (miles)',{exact:true}).fill('2');await page.getByLabel('Så langt vil du kunne løbe (miles)',{exact:true}).fill('5');await page.getByLabel('Enhed for dit mål',{exact:true}).selectOption('km');assert.match(await page.getByLabel('Så langt vil du kunne løbe (km)',{exact:true}).inputValue(),/^8,05/);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);await page.screenshot({path:'test-artifacts/clear-goal-'+width+'.png',fullPage:true});await context.close();}});
- await check('Concise injury-only onboarding creates and confirms a real stored plan; number fields can be cleared',async()=>{
+ await check('Client submits without AI jargon; only MFA-verified coach publishes; three choices and history preserved',async()=>{
   const fresh=await customer('ai-novice'),context=await browser!.newContext({viewport:{width:390,height:844}});
-  const {createGeneratedPlan,applyGeneratedPlan}=await import('../lib/ai/generated-plan-store');
+  const {createGeneratedPlan,applyGeneratedPlan,latestGenerated,coachReview,publishReviewedPlan}=await import('../lib/ai/generated-plan-store');
   const {fixturePlan}=await import('./generated-plan-fixture.mts');
   await context.addCookies(fresh.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));
   const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));let generatorCalls=0;
@@ -100,7 +100,7 @@ try{
   });
   await page.goto(env.APP_URL+'/onboarding',{waitUntil:'networkidle'});
   await page.getByRole('button',{name:'18–39 år',exact:true}).click();await page.getByRole('button',{name:'Helt ny',exact:true}).click();
-  await page.getByLabel('Jeg er mindst 18 år.',{exact:true}).check();await page.getByLabel(/Jeg accepterer, at SHAZ gemmer/).check();
+  await page.getByLabel('Jeg er mindst 18 år.',{exact:true}).check();await page.getByLabel(/Jeg accepterer, at SHAZ og/).check();
   await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din uge',exact:true}).waitFor();
   await page.getByLabel('Cardiopas om ugen').selectOption('2');const duration=page.getByLabel('Ønsket varighed (min.)');await duration.fill('');assert.equal(await duration.inputValue(),'');await duration.fill('30');await duration.blur();assert.equal(await duration.inputValue(),'30');await page.getByLabel('Cardiopas om ugen').selectOption('0');
   await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Skader',exact:true}).waitFor();
@@ -108,11 +108,44 @@ try{
   await page.getByRole('button',{name:'Nej',exact:true}).click();await page.screenshot({path:'test-artifacts/ai-short-injury-390.png',fullPage:true});
   await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din mad',exact:true}).waitFor();await page.getByRole('button',{name:'Vegansk',exact:true}).click();
   await page.getByRole('button',{name:/Gem og fortsæt/}).click();await page.getByRole('heading',{name:'Din plan',exact:true}).waitFor();
-  await page.getByLabel(/Jeg vælger .* som dag 1/).check();await page.getByLabel(/Jeg accepterer, at OpenAI behandler/).check();
-  await page.getByRole('button',{name:'Lav min trænings- og madplan',exact:true}).click();await page.getByRole('heading',{name:'Dit samlede forslag',exact:true}).waitFor();
+  await page.getByLabel(/Jeg vælger .* som dag 1/).check();assert.equal(await page.getByText(/OpenAI|AI-forslag/).count(),0);
+  await page.getByRole('button',{name:'Send til godkendelse',exact:true}).click();await page.getByRole('heading',{name:'Afventer Shaz’ gennemgang',exact:true}).waitFor();
   assert.equal(generatorCalls,1);assert.equal((await db().query('SELECT count(*)::int n FROM shaz_days WHERE user_id=$1',[fresh.id])).rows[0].n,0);
-  await page.screenshot({path:'test-artifacts/ai-plan-preview-390.png',fullPage:true});
-  await page.getByRole('button',{name:'Brug denne trænings- og madplan',exact:true}).click();await page.waitForURL('**/app');
+  await page.screenshot({path:'test-artifacts/client-awaiting-coach-390.png',fullPage:true});
+  const pending=await latestGenerated(fresh.id);
+  assert.equal(pending.status,'awaiting_review');assert.ok(pending.result);
+  assert.ok(!('sessions' in pending.result!),'No unreviewed sessions sent to the client');
+  const generatedId=pending.result!.id;
+  const deniedActivation=await fetch(env.APP_URL+'/api/platform/activate',{method:'POST',headers:{origin:env.APP_URL,cookie:fresh.cookie,'Content-Type':'application/json'},body:JSON.stringify({confirmStart:true})});
+  assert.equal(deniedActivation.status,403);
+  const deniedApply=await fetch(env.APP_URL+'/api/ai/plan',{method:'POST',headers:{origin:env.APP_URL,cookie:fresh.cookie,'Content-Type':'application/json'},body:JSON.stringify({action:'apply',id:generatedId})});
+  assert.equal(deniedApply.status,403);
+  await assert.rejects(()=>applyGeneratedPlan(fresh.id,generatedId),/afventer godkendelse/);
+  await assert.rejects(()=>publishReviewedPlan(fresh.id,generatedId,1),/Coachadgang/);
+  assert.equal(await page.getByRole('button',{name:'Brug denne trænings- og madplan'}).count(),0);
+  const coach=await customer('coach-reviewer');
+  await db().query("INSERT INTO shaz_roles(user_id,role) VALUES($1,'owner')",[coach.id]);
+  const session=await auth().api.getSession({headers:new Headers({cookie:coach.cookie})});
+  // Isolated MFA fixture; no production role, user or session is modified.
+  await db().query('UPDATE shaz_user SET "twoFactorEnabled"=true WHERE id=$1',[coach.id]);
+  await db().query('INSERT INTO shaz_two_factor(id,secret,"backupCodes","userId",verified) VALUES($1,$2,$3,$4,true)',[randomUUID(),'fixture-secret','fixture-backups',coach.id]);
+  await db().query("INSERT INTO shaz_admin_mfa(session_id,user_id,expires_at) VALUES($1,$2,now()+interval '10 minutes')",[session!.session.id,coach.id]);
+  const coachContext=await browser!.newContext({viewport:{width:1440,height:1000}});
+  await coachContext.addCookies(coach.cookie.split('; ').map(c=>{const at=c.indexOf('=');return{name:c.slice(0,at),value:c.slice(at+1),url:env.APP_URL};}));
+  const cp=await coachContext.newPage();await cp.goto(env.APP_URL+'/admin/plans');
+  await cp.getByRole('button',{name:'Gennemgå plan',exact:true}).first().click();
+  await cp.getByRole('button',{name:'Skift øvelse',exact:true}).first().click();
+  assert.ok(await cp.locator('.exercise-option').count()>0);
+  await cp.locator('.exercise-option').first().click();
+  await cp.getByRole('heading',{name:'Samlet plan · version 2',exact:true}).waitFor();
+  await assert.rejects(()=>publishReviewedPlan(coach.id,generatedId,1),/ændret/);
+  await cp.screenshot({path:'test-artifacts/coach-review-1440.png',fullPage:true});
+  await cp.getByLabel(/Jeg har gennemgået denne version/).check();
+  await cp.getByRole('button',{name:'Godkend og send planen',exact:true}).click();
+  await cp.getByText('Planen er godkendt og lagt i kundens forløb.',{exact:true}).waitFor();
+  assert.equal((await db().query('SELECT reviewed_by FROM shaz_generated_plans WHERE id=$1',[generatedId])).rows[0].reviewed_by,coach.id);
+  await coachContext.close();
+  await page.goto(env.APP_URL+'/app');
   assert.equal((await profile(fresh.id)).data.diet,'vegan');assert.ok((await profile(fresh.id)).data.aiPlanId);
   assert.equal((await db().query('SELECT count(*)::int n FROM shaz_days WHERE user_id=$1',[fresh.id])).rows[0].n,100);
   assert.equal((await db().query('SELECT count(*)::int n FROM shaz_meal_days WHERE user_id=$1',[fresh.id])).rows[0].n,100);
@@ -124,7 +157,7 @@ try{
   await db().query("UPDATE shaz_days SET status='completed',log=$2 WHERE id=$1",[day.id,JSON.stringify({sets:[{exercise:day.plan.exercises[0].id,set:1,reps:10,kg:5,effort:7}]})]);
   const meal=(await db().query('SELECT date::text,data FROM shaz_meal_days WHERE user_id=$1 ORDER BY date LIMIT 1',[fresh.id])).rows[0];meal.data.slots[0].status='eaten';
   await db().query('UPDATE shaz_meal_days SET data=$3 WHERE user_id=$1 AND date=$2',[fresh.id,meal.date,JSON.stringify(meal.data)]);
-  await applyGeneratedPlan(fresh.id,next.id);
+  await publishReviewedPlan(coach.id,next.id,1);
   assert.equal((await db().query('SELECT status FROM shaz_days WHERE id=$1',[day.id])).rows[0].status,'completed');
   assert.deepEqual((await db().query('SELECT data FROM shaz_meal_days WHERE user_id=$1 AND date=$2',[fresh.id,meal.date])).rows[0].data,meal.data);
   assert.deepEqual(errors,[]);await context.close();

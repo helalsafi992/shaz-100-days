@@ -166,7 +166,7 @@ function applyAuthCookies(h: Headers, response: Response) {
 }
 try {
   await check(
-    "Three simulated paid journeys: webhook → captured e-mail → verified login → saved onboarding → activation → workout",
+    "Three paid access journeys and denied self-activation; historical workout fixtures",
     async () => {
       for (let i = 0; i < 3; i++) {
         const email = `profile${i}@example.invalid`,
@@ -237,8 +237,10 @@ try {
         }
         assert.equal(
           (await post("activate", { confirmStart: true }, h)).status,
-          200,
+          403,
         );
+        // Historical fixture setup only; coach browser tests cover actual release.
+        await activate(s.user.id);
         const state = await snapshot(s.user.id);
         assert.equal(state.days.length, 100);
         const day = state.days.find((d) => d.scheduled_date === today);
@@ -1031,7 +1033,7 @@ try {
         { cardio: { ...cardio, weekdays: [weekday], intensity: "moderate" } },
         u.headers,
       );
-      assert.equal(invalid.status, 400);
+      assert.equal(invalid.status, 200);
     },
   );
   await check(
@@ -1070,13 +1072,9 @@ try {
         ).status,
         404,
       );
-      const { alternatives } = await import("../lib/training");
+      const { replacementOptions } = await import("../lib/exercise-replacements");
       const { catalog } = await import("../lib/content");
-      const options = alternatives(
-        old,
-        profiles[1] as any,
-        (await catalog("exercise")) as any,
-      );
+      const options = replacementOptions(old,profiles[1] as any,(await catalog("exercise")) as any,day.plan);
       assert.ok(options.length);
       assert.equal(
         (
@@ -1375,10 +1373,15 @@ try {
         expectedVersion: preview.data.version,
         fingerprint: preview.data.fingerprint,
       };
+      const {trainingChange} = await import('../lib/training-change');
+      assert.equal((await planpost('training-confirm',confirm,u.headers)).status,403,'A full replacement plan requires coach release, even for an old profile');
+      const internalConfirm = async (value: any) => {
+        try { return {status:200,data:await trainingChange(u.id,value,true)}; }
+        catch(error) { return {status:(error as {status?:number}).status||500,data:null}; }
+      };
       assert.equal(
         (
-          await planpost(
-            "training-confirm",
+          await internalConfirm(
             {
               ...confirm,
               data: {
@@ -1386,14 +1389,13 @@ try {
                 goal: input.data.goal === "maintain" ? "fitness" : "maintain",
               },
             },
-            u.headers,
           )
         ).status,
         409,
       );
       const results = await Promise.all([
-        planpost("training-confirm", confirm, u.headers),
-        planpost("training-confirm", confirm, u.headers),
+        internalConfirm(confirm),
+        internalConfirm(confirm),
       ]);
       assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
       const before = await snapshot(u.id),
@@ -2518,12 +2520,10 @@ try {
         path: "test-artifacts/mobile-workout-draft.png",
         fullPage: false,
       });
-      const swap = page.locator('select[aria-label^="Byt "]').first();
-      const replacement = await swap
-        .locator("option")
-        .nth(1)
-        .getAttribute("value");
-      await swap.selectOption(replacement!);
+      await page.getByRole("button", {name:"Skift øvelse",exact:true}).click();
+      const replacements=page.locator('.exercise-option');
+      assert.ok(await replacements.count()>0 && await replacements.count()<=3);
+      await replacements.first().click();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       await page.reload();
       const state = await (

@@ -1,3 +1,4 @@
+import {withSwapGroups} from "../exercise-replacements";
 import { z } from 'zod';
 import { normalizeProfile, sessionProfile, addDays, type Profile } from '../profile';
 import { generatePlan, hasEquipment, type Exercise, type DayPlan } from '../training';
@@ -16,7 +17,7 @@ export const aiPlanSchema=z.object({
  sessions:z.array(z.object({weekday:z.number().int().min(0).max(6),title:z.string().min(1).max(80),
   exercises:z.array(z.object({id:z.string(),sets:z.number().int().min(1).max(4),minReps:z.number().int().min(6).max(15),maxReps:z.number().int().min(6).max(15),restSeconds:z.number().int().min(45).max(180),reason:z.string().min(1).max(220)}).strict()).max(8),
   notes:z.string().max(400)}).strict()).max(6),
- meals:z.array(choice).max(42),cardio:z.array(choice).max(6),
+ meals:z.array(choice).max(42),cardio:z.array(choice).max(7),
  injuryAdvice:z.array(z.string().max(350)).max(4),progression:z.string().min(1).max(550),
  citations:z.array(z.string().regex(/^\d{1,10}$/)).max(8),
  needsReview:z.boolean(),reviewReason:z.string().max(500),
@@ -30,12 +31,12 @@ export function injuryPolicy(a:IntakeDraft,p:Profile){
  if(known.some(k=>s && s[k]!=='no')||p.pregnantOrBreastfeeding||p.medicalNutrition||p.eatingDisorderHistory)
   throw new HttpError(409,'Der er tidligere oplyst et medicinsk hensyn, som denne generelle plan ikke kan tilsidesætte. Få det afklaret, før en ny plan aktiveres.');
  if(i?.status==='postoperative'||i?.worsening==='yes'||i?.dailyLimitation==='yes'||(i?.pain||0)>=7||i?.restrictions.length)
-  throw new HttpError(409,'Ny operation, betydelige eller tiltagende gener kræver faglig vurdering. AI kan ikke give en sikker genoptræningsprotokol ud fra disse oplysninger alene.');
+  throw new HttpError(409,'Ny operation, betydelige eller tiltagende gener kræver faglig vurdering. Vi kan ikke fastslå en sikker genoptræningsprotokol ud fra disse oplysninger alene.');
  const note=a.injuryNote||'';
  if(/brystsmer|besvim|kraftnedsætt|følelsesløs|kan ikke støtte|kan ikke gå|nylig.{0,16}oper|opereret.{0,16}(uge|dag)|brud|fraktur|kraftig hævelse|låser|akut skade/i.test(note))
   throw new HttpError(409,'Beskrivelsen indeholder symptomer, der skal vurderes af en fagperson før et nyt program. Ved akutte alvorlige symptomer skal du søge akut hjælp.');
  if(i?.status==='current'&&(!i.areas.length||note.trim().length<8))
-  throw new HttpError(400,'Skriv kort, hvor skaden sidder og hvilke bevægelser der giver gener. AI må ikke gætte.');
+  throw new HttpError(400,'Skriv kort, hvor skaden sidder og hvilke bevægelser der giver gener. Planen må ikke bygge på gæt.');
  const excluded=new Set<string>();
  if(i?.status==='current'){
   const map:Record<string,string[]>={neck:['shoulder','hinge','squat'],shoulder:['push','pull','shoulder'],elbow:['push','pull','shoulder'],wrist:['push','pull','shoulder'],back:['hinge','squat','single','core'],'hip-groin':['squat','single','hinge'],knee:['squat','single','knee-flexion','calf'],'ankle-foot':['squat','single','calf'],other:[]};
@@ -83,12 +84,13 @@ export function validateGenerated(raw:unknown,c:Candidates,sources:Evidence[]):A
 }
 
 export function compilePlan(c:Candidates,p:AIPlan){
- const strength=c.base.map(d=>{if(d.kind!=='workout')return d;const s=p.sessions.find(x=>x.weekday===new Date(d.date+'T12:00:00Z').getUTCDay())!;
+ const rawStrength=c.base.map(d=>{if(d.kind!=='workout')return d;const s=p.sessions.find(x=>x.weekday===new Date(d.date+'T12:00:00Z').getUTCDay())!;
   const options=c.sessions.find(x=>x.weekday===s.weekday)!;
   return {...d,title:s.title,warmup:c.injury.active?['3–5 minutter rolig, smertefri bevægelse.','Start hver valgt øvelse med et let prøvesæt. Stop hvis symptomerne tiltager.']:d.warmup,
    explanations:[s.notes,p.progression,...p.injuryAdvice],ruleVersion:planVersion,
    exercises:s.exercises.map(e=>({...c.catalog.find(x=>x.id===e.id)!,id:e.id,name:options.options.find(o=>o.id===e.id)!.name,sets:e.sets,min:e.minReps,max:e.maxReps,rest:e.restSeconds,intensity:'Bevar 2–3 gentagelser i reserve. Stop ved tiltagende smerter.',reason:e.reason}))};
  }) as DayPlan[];
+ const strength=rawStrength.map(d=>withSwapGroups({...d,excludedPatterns:c.injury.excluded},c.profile,c.catalog));
  const meals=Array.from({length:100},(_,i)=>{const day=structuredClone(c.mealWeek[i%7]);day.date=addDays(c.profile.startDate,i);day.slots=day.slots.map(s=>({...s,selected:s.options.find(o=>o.recipe.id===p.meals.find(x=>x.key===(i%7)+':'+s.id)?.id)||null}));if(day.slots.some(s=>!s.selected))throw Error('AI_MEAL_MISSING');const q=mealQuality(day);if(day.target&&Math.abs(q.total.kcal-day.target)>day.target*.05)throw Error('AI_ENERGY_MISMATCH');return day;});
  const cardio=c.cardio.map(d=>{const key=String(new Date(d.date+'T12:00:00Z').getUTCDay()),chosen=p.cardio.find(x=>x.key===key);return{...d,selected:d.options.find(o=>o.id===chosen?.id)!,ruleVersion:planVersion};});
  return {strength,meals,cardio};

@@ -3,7 +3,7 @@ import type { Profile } from "../profile";
 import { intakeSchema, intakeVersion, wishesSchema, safetySchema } from "./intake";
 /** Encrypted, account-scoped answers. PubMed never receives personal search strings. */
 export const intakeDraftSchema = z.object({
- version:z.literal(intakeVersion),adult:z.literal(true),wishes:wishesSchema,safety:safetySchema.optional(),processingConsent:z.literal(true),aiConsent:z.boolean().default(false),injuryNote:z.string().max(700).optional(),conciseMode:z.literal(true).optional(),planConsentVersion:z.literal("openai-plan-v2").optional()
+ version:z.literal(intakeVersion),adult:z.literal(true),wishes:wishesSchema,safety:safetySchema.optional(),processingConsent:z.literal(true),aiConsent:z.boolean().default(false),injuryNote:z.string().max(700).optional(),conciseMode:z.literal(true).optional(),planConsentVersion:z.enum(["openai-plan-v2","coach-plan-v3"]).optional()
 }).strict();
 export type IntakeDraft=z.infer<typeof intakeDraftSchema>;
 export function fullIntake(p:Profile,draft:IntakeDraft){

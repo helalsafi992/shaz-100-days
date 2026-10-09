@@ -1,4 +1,5 @@
 import type { Profile } from "./profile";
+import { replacementCatalog } from "./replacement-catalog";
 import { addDays, normalizeProfile, sessionProfile } from "./profile";
 import { HttpError } from "./errors";
 export type Exercise = {
@@ -366,6 +367,7 @@ export const exercises: Exercise[] = [
     ],
     "Træk foran kroppen, aldrig bag nakken.",
   ),
+  ...replacementCatalog,
 ];
 for (const e of exercises) {
   e.perSide = [
@@ -416,6 +418,7 @@ export type PlannedExercise = Exercise & {
   max: number;
   rest: number;
   intensity: string;
+  reason?: string;
 };
 export type DayPlan = {
   day: number;
@@ -439,6 +442,8 @@ export type DayPlan = {
   explanations?: string[];
   paused?: boolean;
   easyRestart?: boolean;
+  swapGroups?: Record<string,string[]>;
+  excludedPatterns?: string[];
 };
 export function hasEquipment(e: Exercise, p: Profile) {
   return e.equipment.every(
@@ -457,6 +462,7 @@ export function alternatives(e: Exercise, p: Profile, catalog = exercises) {
       x.id !== e.id &&
       !(p.exerciseAvoid || []).includes(x.id) &&
       x.pattern === e.pattern &&
+      (x.unit || "reps") === (e.unit || "reps") &&
       hasEquipment(x, p),
   );
 }

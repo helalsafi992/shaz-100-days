@@ -336,9 +336,7 @@ export default function CardioPlanner({
               </div>
             </fieldset>
             <p className="p-note">
-              Begyndere starter højst med 20 minutter og øger planlagt varighed
-              gradvist op mod den valgte tid. Mindst én dag uden planlagte pas
-              bevares. Ingen ekstra cardio ved større underskud.
+              Du vælger selv varigheden og dagene. Belastning og restitution indgår i coachens gennemgang. Ingen ekstra cardio ved større underskud.
             </p>
             <button
               className="p-button"

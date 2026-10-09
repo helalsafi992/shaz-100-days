@@ -1,3 +1,6 @@
+import {replacementOptions} from "@/lib/exercise-replacements";
+import {storedIntake} from "@/lib/ai/intake-store";
+import {injuryPolicy} from "@/lib/ai/plan-builder";
 import { scheduledStrength } from "@/lib/schedule-breaks";
 import { scheduleBreaks, assertNoBreak } from "@/lib/break-store";
 import { headers as nextHeaders } from "next/headers";
@@ -275,8 +278,7 @@ export async function POST(
     }
     if (path === "activate") {
       z.object({ confirmStart: z.literal(true) }).parse(input);
-      await activate(s.user.id);
-      return Response.json({ ok: true });
+      throw new HttpError(403,"Din plan skal først godkendes af Shaz.");
     }
     const p = await ([
       "shopping",
@@ -390,6 +392,9 @@ export async function POST(
         .parse(input);
       const exerciseCatalog = (await catalog("exercise")) as Exercise[];
       return await transaction(async (c) => {
+        await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[s.user.id]);
+        const injuryAnswers=await storedIntake(s.user.id,c);
+        const injury=injuryAnswers?injuryPolicy(injuryAnswers,p.data):null;
         await c.query(
           "SELECT user_id FROM shaz_profile WHERE user_id=$1 FOR UPDATE",
           [s.user.id],
@@ -429,26 +434,25 @@ export async function POST(
           old &&
           [
             old,
-            ...alternatives(
-              old,
-              { ...p.data, equipment: d.plan.equipment || p.data.equipment },
-              exerciseCatalog,
-            ),
+            ...replacementOptions(old,p.data,exerciseCatalog,{...d.plan,excludedPatterns:[...(d.plan.excludedPatterns||[]),...(injury?.excluded||[])]}),
           ].find((e) => e.id === v.replacement);
         if (!old || !option)
           throw new HttpError(400, "Alternativet passer ikke til dit udstyr.");
+        if(option.id!==old.id && d.plan.exercises.some(e=>e.id===option.id))throw new HttpError(400,"Øvelsen findes allerede i passet.");
+        if(injury?.excluded.includes(option.pattern))throw new HttpError(409,"Dette alternativ passer ikke til dine aktuelle hensyn.");
+        if(d.plan.swapGroups?.[old.id])d.plan.swapGroups={...d.plan.swapGroups,[option.id]:d.plan.swapGroups[old.id]};
         d.plan.archivedExercises = [
           ...(d.plan.archivedExercises || []).filter((e) => e.id !== old.id),
           old,
         ];
         if (path === "restore-exercise") {
-          d.plan.exercises.push({ ...old, ...option });
+          d.plan.exercises.push({ ...old, ...option, unit: option.unit, perSide: option.perSide });
           d.plan.removedExercises = (d.plan.removedExercises || []).filter(
             (e) => e.id !== old.id,
           );
         } else
           d.plan.exercises = d.plan.exercises.map((e) =>
-            e.id === old.id ? { ...e, ...option } : e,
+            e.id === old.id ? { ...e, ...option, unit: option.unit, perSide: option.perSide } : e,
           );
         await c.query(
           "UPDATE shaz_days SET plan=$3,updated_at=now() WHERE id=$1 AND user_id=$2",

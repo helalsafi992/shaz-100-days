@@ -243,16 +243,11 @@ test("H/M: cardio respects equipment, selected weekdays, progression, rest and e
   const cardio = generateCardio(profile);
   assert.ok(cardio.length > 20);
   assert.ok(cardio.every((c) => c.day < 100 && c.options.length === 3));
-  assert.equal(cardio[0].selected.minutes, 20);
+  assert.equal(cardio[0].selected.minutes, 30);
   assert.equal(generatePlan(profile).length, 100);
   const goals = generateCardio({ ...profile, deficitLevel: "aggressive" });
   assert.deepEqual(cardio, goals, "calorie deficit never increases cardio");
-  assert.ok(
-    weekProblems({
-      ...profile,
-      cardio: { ...profile.cardio, weekdays: [1, 3], intensity: "moderate" },
-    }).length,
-  );
+  assert.deepEqual(weekProblems({...profile, cardio: {...profile.cardio, weekdays: [1,3], intensity: "moderate"}}), []);
   assert.ok(
     weekProblems({
       ...profile,

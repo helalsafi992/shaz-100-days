@@ -1,7 +1,8 @@
 import { db,schema,transaction } from '../db';
+import type {PoolClient} from 'pg';
 import { seal,unseal } from '../security';
 import { intakeDraftSchema,type IntakeDraft } from './intake-draft';
-export async function storedIntake(user:string):Promise<IntakeDraft|null>{await schema();const r=await db().query('SELECT encrypted_answers FROM shaz_ai_intake WHERE user_id=$1',[user]);return r.rows[0]?intakeDraftSchema.parse(JSON.parse(unseal(r.rows[0].encrypted_answers))):null;}
+export async function storedIntake(user:string,connection?:PoolClient):Promise<IntakeDraft|null>{if(!connection)await schema();const r=await (connection||db()).query('SELECT encrypted_answers FROM shaz_ai_intake WHERE user_id=$1',[user]);return r.rows[0]?intakeDraftSchema.parse(JSON.parse(unseal(r.rows[0].encrypted_answers))):null;}
 export async function storeIntake(user:string,input:unknown):Promise<IntakeDraft>{
  const parsed=intakeDraftSchema.parse(input);await schema();
  return transaction(async c=>{
@@ -15,4 +16,4 @@ export async function storeIntake(user:string,input:unknown):Promise<IntakeDraft
   await c.query('DELETE FROM shaz_ai_proposals WHERE user_id=$1',[user]);return data;
  });
 }
-export async function revokeIntake(user:string){await schema();await transaction(async c=>{await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[user]);await c.query('DELETE FROM shaz_ai_proposals WHERE user_id=$1',[user]);await c.query('DELETE FROM shaz_ai_intake WHERE user_id=$1',[user]);});}
+export async function revokeIntake(user:string){await schema();await transaction(async c=>{await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[user]);await c.query('DELETE FROM shaz_ai_proposals WHERE user_id=$1',[user]);await c.query("DELETE FROM shaz_generated_plans WHERE user_id=$1 AND status<>'committed'",[user]);await c.query('DELETE FROM shaz_ai_intake WHERE user_id=$1',[user]);});}

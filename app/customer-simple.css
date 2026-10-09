@@ -1757,3 +1757,13 @@ body:has(.test-environment-banner) .s-sidebar {
   .s-workspace .s-header-actions .s-edit-plan { padding: 9px 7px; gap: 5px; }
   .s-workspace .s-header-actions .s-edit-plan svg { width: 14px; }
 }
+
+.exercise-swap { margin: 10px 0; }
+.exercise-swap-options { padding:16px; border:1px solid #cbdcc1; border-radius:12px; background:#f5f9ef; margin-top:10px; display:grid; gap:10px; }
+.exercise-option { display:grid; gap:5px; text-align:left; border:1px solid #d6e2cd; border-radius:10px; background:white; color:#1d3828; padding:14px; min-height:70px; cursor:pointer; }
+.exercise-option span,.exercise-option small { color:#64745d; font-size:13px; }
+.exercise-option:focus-visible { outline:3px solid #4d7853; outline-offset:3px; }
+.coach-review-page { max-width:1000px; margin:auto; padding:24px; }
+.coach-exercise { border-bottom:1px solid #e1e9db; padding:14px 0; }
+.coach-client-flow { background:white; padding:20px; border-radius:16px; border:1px solid #dce6d5; }
+.coach-client-flow h2 { font-size:24px; }

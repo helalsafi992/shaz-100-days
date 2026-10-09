@@ -36,7 +36,7 @@ export default function CardioSettings({
               })
             }
           >
-            {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
               <option key={n} value={n}>
                 {n === 0 ? "Ingen ekstra cardio" : n}
               </option>
@@ -47,7 +47,7 @@ export default function CardioSettings({
           <>
             <label>
               Ønsket varighed (min.)
-              <NumberInput min={10} max={60} value={value.minutes} onValue={minutes=>field("minutes",minutes as number)}/>
+              <NumberInput min={1} max={1440} value={value.minutes} onValue={minutes=>field("minutes",minutes as number)}/>
             </label>
             <label>
               Cardioerfaring
@@ -80,8 +80,7 @@ export default function CardioSettings({
       {value.days > 0 && (
         <>
           <p>
-            Vælg {value.days} dage. Bevar mindst én dag uden styrke eller
-            cardio.
+            Vælg {value.days} dage. Du kan vælge de samme dage som styrketræning.
           </p>
           <div className="weekday-choices">
             {weekdays.map((i) => (
@@ -160,8 +159,7 @@ export default function CardioSettings({
             ))}
           </div>
           <p className="p-note">
-            Cardio lægges omkring styrken. Begyndere starter højst med 20
-            minutter. Kalorier fra træning lægges ikke oven i madmålet.
+            Du vælger selv varigheden. Shaz gennemgår den samlede belastning, før planen udleveres.
           </p>
         </>
       )}

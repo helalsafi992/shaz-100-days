@@ -137,6 +137,7 @@ export default function Admin() {
           {message}
         </p>
       )}
+      {data?.role === "owner" && <a className="p-button" href="/admin/plans">Planer til godkendelse</a>}
       <nav className="admin-tabs">
         {[
           ["overview", "Overblik"],

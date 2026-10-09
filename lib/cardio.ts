@@ -1,8 +1,8 @@
 import type { Profile } from "./profile";
 import { addDays } from "./profile";
 export const cardioRule = {
-  id: "cardio-v1",
-  version: 1,
+  id: "cardio-flexible-v2",
+  version: 2,
   status: "review",
   weeklyIncrease: 0.05,
   beginnerStart: 20,
@@ -45,15 +45,6 @@ export function weekProblems(p: Profile, rule: CardioPolicy = cardioRule) {
   const issues: string[] = [];
   if (new Set(c.weekdays).size !== c.days)
     issues.push("Vælg det samme antal cardiougedage som cardiopas.");
-  if (new Set([...p.weekdays, ...c.weekdays]).size > rule.maxActiveDays)
-    issues.push("Bevar mindst én dag uden planlagte styrke- og cardiopas.");
-  if (
-    c.weekdays.some((d) => p.weekdays.includes(d)) &&
-    (c.intensity !== "easy" || c.minutes > rule.maxCombinedEasyMinutes)
-  )
-    issues.push(
-      "På styrkedage kan der højst ligge 20 minutters let cardio. Vælg en anden dag eller kortere, let cardio.",
-    );
   if (c.forms.includes("cycle") && !c.equipment.includes("bike"))
     issues.push("Cykling kræver adgang til cykel eller motionscykel.");
   if (c.forms.includes("elliptical") && !c.equipment.includes("elliptical"))
@@ -71,6 +62,16 @@ export function weekProblems(p: Profile, rule: CardioPolicy = cardioRule) {
     issues.push("Gang og løb/gang kræver udendørs mulighed eller løbebånd.");
   return issues;
 }
+/** Advice is visible to the coach, never a hidden cap or a block on the selected time. */
+export function cardioAdvice(p: Profile) {
+  const c = p.cardio;
+  if (!c?.days) return [];
+  const notes: string[] = [];
+  if (c.weekdays.some(d => p.weekdays.includes(d))) notes.push("Styrke og cardio samme dag: prioritér dit vigtigste mål først og tilpas efter restitution.");
+  if (new Set([...p.weekdays, ...c.weekdays]).size === 7) notes.push("Aktivitet alle ugens dage: variér belastningen og planlæg lette dage efter behov.");
+  if (c.level === "beginner" && c.minutes > 30) notes.push("Du har valgt et længere pas som begynder. Coachen gennemgår belastningen; varigheden er ikke ændret.");
+  return notes;
+}
 export function cardioOptions(
   p: Profile,
   week: number,
@@ -79,10 +80,7 @@ export function cardioOptions(
   const c = p.cardio;
   if (!c || !c.days) return [];
   // Calendar time alone is not evidence of adaptation. A new duration requires acceptance.
-  const minutes =
-    c.level === "beginner"
-      ? Math.min(c.minutes, rule.beginnerStart)
-      : c.minutes;
+  const minutes = c.minutes;
   const intensity =
     c.intensity === "easy"
       ? "Let: RPE 2–3 af 10. Du kan tale i hele sætninger uden besvær."
@@ -98,7 +96,7 @@ export function cardioOptions(
   const out: CardioOption[] = [];
   for (const f of c.forms)
     for (let i = 0; i < 3; i++) {
-      const adjusted = f === "walk-run" ? Math.max(10, minutes - 5) : minutes;
+      const adjusted = minutes;
       out.push({
         id: f + "-" + i,
         form: f,
@@ -106,7 +104,7 @@ export function cardioOptions(
           names[f] + [" i roligt flow", " i to blokke", " med korte pauser"][i],
         minutes: adjusted,
         intensity,
-        warmup: "Start med 3 minutter meget roligt, og øg gradvist.",
+        warmup: `Start med ${Math.min(3, Math.max(1, Math.floor(minutes / 5)))} minut meget roligt. Opvarmning og pauser er med i din valgte tid.`,
         main:
           f === "walk-run"
             ? `Skift mellem ${c.level === "beginner" ? "30 sekunders let jog og 2 minutters gang" : "1 minuts let jog og 2 minutters gang"}. Hold samme lette oplevede anstrengelse. Gå hele passet, hvis løb ikke føles godt.`

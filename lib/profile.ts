@@ -104,9 +104,9 @@ export const profileFields = z.object({
   exerciseAvoid: z.array(z.string().max(100)).max(30).optional(),
   cardio: z
     .object({
-      days: z.number().int().min(0).max(6),
-      weekdays: z.array(z.number().int().min(0).max(6)).max(6),
-      minutes: z.number().int().min(10).max(60),
+      days: z.number().int().min(0).max(7),
+      weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+      minutes: z.number().int().min(1).max(1440),
       forms: z
         .array(
           z.enum(["walk", "cycle", "walk-run", "run", "elliptical", "row"]),
@@ -183,7 +183,6 @@ export const profileSchema = profileFields.superRefine((p, c) => {
   const hardDays = new Set([
     ...p.weekdays,
     ...(p.otherSport || []).filter((s) => s.hard).map((s) => s.weekday),
-    ...(p.cardio?.intensity === "moderate" ? p.cardio.weekdays : []),
   ]);
   if (hardDays.size > 6)
     c.addIssue({
