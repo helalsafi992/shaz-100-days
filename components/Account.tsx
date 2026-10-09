@@ -1,5 +1,8 @@
 "use client";
 import { SimpleNavigation } from "./customer/SimpleExperience";
+import { normalizeProfile, labels, weekdayNames, type Profile } from "@/lib/profile";
+import type { MeasurableGoal } from "@/lib/goal-summary";
+import GoalSummaryCard from "./GoalSummaryCard";
 import { useState } from "react";
 type Order = {
   id: string;
@@ -12,11 +15,17 @@ type Order = {
 export default function Account({
   email,
   orders,
+  profile,
+  startDate,
+  measurableGoal,
   test = false,
   isAdmin = false,
   support,
 }: {
   email: string;
+  profile?: Profile;
+  startDate?: string | null;
+  measurableGoal?: MeasurableGoal | null;
   isAdmin?: boolean;
   support?: string;
   test?: boolean;
@@ -59,6 +68,24 @@ export default function Account({
             {message}
           </p>
         )}
+        {profile && (
+          <section className="p-card shaz-profile-summary">
+            <span className="p-eyebrow">{startDate ? "DIN AKTIVE PLAN" : "DINE GEMTE VALG"}</span>
+            <h2>Sådan er dit forløb sat op</h2>
+            <p><strong>Mål:</strong> {labels[profile.goal] || "Bedre form"} · {labels[profile.level]}</p>
+            <p><strong>Træning:</strong> {profile.days} styrkepas · {profile.cardio?.days || 0} cardiopas om ugen</p>
+            <p><strong>Sted:</strong> {labels[profile.place]}</p>
+            <p><strong>Mad:</strong> {labels[profile.diet]}{profile.halal ? " · halal-egnede ingredienser" : ""} · {profile.mealCount || 4} måltider · {labels[profile.nutrition]}</p>
+            {profile.days > 0 && <details className="profile-week-details"><summary>Se mine træningsdage</summary>
+              {normalizeProfile(profile).schedule!.map((slot) => {
+                const location = normalizeProfile(profile).locations!.find((l) => l.id === slot.locationId);
+                return <p key={slot.weekday}>{weekdayNames[slot.weekday]} · {location?.name || labels[profile.place]} · {slot.minutes} min.</p>;
+              })}
+            </details>}
+            <a className="p-secondary" href="/onboarding?edit=1">Ret min plan</a>
+          </section>
+        )}
+        <GoalSummaryCard goal={measurableGoal} isDraft={!startDate} compact />
         {test && (
           <details className="p-card">
             <summary>Testværktøjer · kun dette isolerede miljø</summary>
