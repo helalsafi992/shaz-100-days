@@ -160,6 +160,25 @@ try{
   await publishReviewedPlan(coach.id,next.id,1);
   assert.equal((await db().query('SELECT status FROM shaz_days WHERE id=$1',[day.id])).rows[0].status,'completed');
   assert.deepEqual((await db().query('SELECT data FROM shaz_meal_days WHERE user_id=$1 AND date=$2',[fresh.id,meal.date])).rows[0].data,meal.data);
+  // Upcoming sessions allow planning swaps, but do not record any future sets.
+  const future=(await db().query("SELECT id,log,plan FROM shaz_days WHERE user_id=$1 AND day BETWEEN 8 AND 14 AND plan->>'kind'='workout' ORDER BY day LIMIT 1",[fresh.id])).rows[0];
+  await page.goto(env.APP_URL+'/app/training?week=2',{waitUntil:'networkidle'});
+  await page.locator('.s-activity-wrap .s-activity').first().click();
+  const swap=page.getByRole('button',{name:'Skift øvelse',exact:true});
+  assert.ok(await swap.isEnabled(),'Future planning must not share the set-recording lock');
+  assert.ok(await page.locator('.set-row input').first().isDisabled(),'Future performance cannot be recorded');
+  await swap.click();
+  const opts=page.locator('.exercise-option');
+  assert.ok(await opts.count()>0 && await opts.count()<=3);
+  await page.screenshot({path:'test-artifacts/future-exercise-options-390.png',fullPage:true});
+  const response=page.waitForResponse(r=>r.url().includes('/api/platform/swap-exercise')&&r.request().method()==='POST');
+  await opts.first().click();
+  assert.equal((await response).status(),200);
+  await page.getByRole('dialog',{name:'Træningspas'}).waitFor({state:'hidden'});
+  const afterFuture=(await db().query('SELECT plan,log FROM shaz_days WHERE id=$1',[future.id])).rows[0];
+  assert.notEqual(afterFuture.plan.exercises[0].id,future.plan.exercises[0].id);
+  assert.deepEqual(afterFuture.log,future.log,'A future swap must not invent recorded sets');
+  assert.equal((await db().query('SELECT count(*)::int n FROM shaz_workout_drafts WHERE day_id=$1',[future.id])).rows[0].n,0);
   assert.deepEqual(errors,[]);await context.close();
  });
  console.log('ALL CLEAR ONBOARDING CHECKS PASSED');
