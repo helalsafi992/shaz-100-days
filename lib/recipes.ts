@@ -774,7 +774,7 @@ export const recipes: Recipe[] = [
     15,
     1,
     [["oats",80],["banana",90],["peanut",25],["chia",16],["strawberry",100]],
-    ["Kog havregryn i vand ved svag varme til en cremet grød.","Top med banan i skiver, jordbær, peanutbutter og chiafrø."],
+    ["Kog havregryn i vand ved svag varme til en cremet grød.","Top med banan i skiver, jordbær, peanutbutter og chiafrø.","Rør forsigtigt rundt før servering, og fordel toppingen over grøden."],
   ),
   r(
     "vegan-berry-tofu-oats",
@@ -783,7 +783,7 @@ export const recipes: Recipe[] = [
     10,
     1,
     [["oats",70],["tofu",200],["blueberry",100],["chia",15],["peanut",15]],
-    ["Blend tofu med lidt vand til en glat creme. Smag til med banan, hvis ønsket (medregn da bananen separat).","Rør havregryn og chia i cremen. Stil koldt natten over og top med blåbær og peanutbutter."],
+    ["Blend tofu med lidt vand til en glat creme. Smag til med banan, hvis ønsket (medregn da bananen separat).","Rør havregryn og chia i cremen. Stil koldt natten over og top med blåbær og peanutbutter.","Rør igen lige før servering og spis den kold."],
   ),
   r(
     "vegan-tofu-potato-breakfast",
@@ -792,7 +792,7 @@ export const recipes: Recipe[] = [
     25,
     1,
     [["tofu",200],["potato",200],["spinach",80],["oil",12],["tomato",90]],
-    ["Skær kartofler i små tern og kog dem møre. Dræn grundigt.","Smuldr tofu og steg den i olivenolie med kartofler, spinat og tomat. Smag til med krydderier uden væsentlig energi."],
+    ["Skær kartofler i små tern og kog dem møre. Dræn grundigt.","Smuldr tofu og steg den i olivenolie med kartofler, spinat og tomat. Smag til med krydderier uden væsentlig energi.","Smag til med krydderier og servér mens retten er varm."],
   ),
   r(
     "vegan-apple-oat-almond",
@@ -801,7 +801,7 @@ export const recipes: Recipe[] = [
     15,
     1,
     [["oats",80],["almonds",25],["peanut",25],["apple",125],["chia",10]],
-    ["Kog havregryn med vand, revet æble og chiafrø, indtil grøden tykner.","Top med hakkede mandler og peanutbutter."],
+    ["Kog havregryn med vand, revet æble og chiafrø, indtil grøden tykner.","Top med hakkede mandler og peanutbutter.","Servér straks, mens grøden er varm."],
   ),
   r(
     "vegan-chickpea-tofu-bowl",
@@ -855,7 +855,7 @@ export const recipes: Recipe[] = [
     10,
     1,
     [["tofu",220],["strawberry",120],["banana",90],["peanut",30],["chia",14]],
-    ["Blend tofu med banan til en glat creme, og tilsæt eventuelt en smule vand.","Top med skårne jordbær, peanutbutter og chiafrø."],
+    ["Blend tofu med banan til en glat creme, og tilsæt eventuelt en smule vand.","Top med skårne jordbær, peanutbutter og chiafrø.","Servér koldt med chiafrøene fordelt på toppen."],
   ),
   r(
     "vegan-tofu-peanut-dip",
@@ -864,7 +864,7 @@ export const recipes: Recipe[] = [
     15,
     1,
     [["tofu",200],["peanut",35],["cucumber",150],["carrot",120],["lemon",12]],
-    ["Blend tofu, peanutbutter og citronsaft med lidt vand til en cremet dip.","Skær agurk og gulerødder i stave og servér til."],
+    ["Blend tofu, peanutbutter og citronsaft med lidt vand til en cremet dip.","Skær agurk og gulerødder i stave og servér til.","Servér den kolde dip med grøntsagsstænger."],
   ),
   r(
     "vegan-apple-oat-peanut",
@@ -873,7 +873,7 @@ export const recipes: Recipe[] = [
     10,
     1,
     [["apple",160],["oats",50],["peanut",30],["almonds",20],["chia",12]],
-    ["Skær æble i tern. Vend med havregryn og chia.","Top med mandler og peanutbutter. Spis straks for en sprød konsistens."],
+    ["Skær æble i tern. Vend med havregryn og chia.","Top med mandler og peanutbutter. Spis straks for en sprød konsistens.","Rør let rundt lige før servering."],
   ),
 ];
 export function nutrients(recipe: Recipe, servings = 1) {
