@@ -189,8 +189,10 @@ export default function Onboarding({
           />
           <PreferredExerciseQuestions value={answers} onChange={setAnswers}/>
         )}
+        {step === 2 && <SafetyQuestions value={answers} onChange={setAnswers}/>}
         {step === 3 && (
           <>
+            <FoodPreferenceQuestions value={answers} onChange={setAnswers}/>
             <h2>Kostpræferencer</h2>
             {choices("diet", ["all", "vegetarian", "vegan", "pescatarian"])}
             <label className="p-check">
