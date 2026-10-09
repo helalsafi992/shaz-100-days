@@ -1714,3 +1714,44 @@ body:has(.test-environment-banner) .s-sidebar {
   word-break: normal;
   overflow-wrap: normal;
 }
+
+
+/* Active profile and goal summary: measured data is distinct from the target. */
+.s-workspace .shaz-profile-summary, .s-workspace .shaz-goal-summary {
+  margin: 0 0 18px;
+  padding: 18px 21px;
+  border: 1px solid #e0e9db;
+  border-radius: 14px;
+  background: #fff;
+}
+.s-workspace .shaz-profile-summary h2,
+.s-workspace .shaz-goal-summary h2 {
+  margin: 6px 0 14px;
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -.025em;
+}
+.s-workspace .shaz-profile-summary > p {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 6px 0;
+  color: #455549;
+}
+.s-workspace .shaz-profile-summary strong { color: #1d3628; }
+.s-workspace .profile-week-details { margin: 12px 0; padding-top: 4px; }
+.s-workspace .profile-week-details summary { min-height: 44px; cursor: pointer; font-size: 14px; font-weight: 650; }
+.s-workspace .profile-week-details p { font-size: 13px; margin: 6px 0; color: #56675b; }
+.s-workspace .shaz-profile-summary > .p-secondary { display: inline-flex; align-items: center; min-height: 44px; margin: 12px 0 0; }
+.s-workspace .shaz-goal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.s-workspace .shaz-goal-header h2 { margin-bottom: 0; }
+.s-workspace .shaz-goal-header a { font-size: 13px; min-height: 44px; flex: none; }
+.s-workspace .shaz-goal-target { font-size: 18px; font-weight: 720; color: #244b30; margin: 18px 0 7px; overflow-wrap: anywhere; }
+.s-workspace .shaz-goal-summary .p-note { margin: 8px 0; font-size: 13px; color: #66766a; }
+.s-workspace .shaz-goal-bar { height: 7px; margin: 12px 0 5px; border-radius: 100px; background: #edf1e8; overflow: hidden; }
+.s-workspace .shaz-goal-bar span { display: block; height: 100%; border-radius: inherit; background: #477e4c; }
+@media(max-width:480px){
+  .s-workspace .shaz-profile-summary, .s-workspace .shaz-goal-summary { padding: 16px; }
+  .s-workspace .shaz-goal-header { align-items: flex-start; }
+  .s-workspace .shaz-goal-header h2 { font-size: 18px; }
+  .s-workspace .shaz-goal-header a { padding: 8px; font-size: 12px; }
+}
